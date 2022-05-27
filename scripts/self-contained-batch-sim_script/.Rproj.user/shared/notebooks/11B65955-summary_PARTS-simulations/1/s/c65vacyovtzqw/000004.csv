@@ -1,0 +1,6 @@
+"0","# X(t) = lambda*land + S1*r1 + (alpha + beta*land + S2*r2 )*t + (gamma + S3*r3)*temp(t) e(t)"
+"0",""
+"0","load(""scripts/self-contained-batch-sim_script/sim-data/19-Jun_simulations/01_PARTS_sim-study.RData"", "
+"0","     verbose = TRUE)"
+"2","Error in readChar(con, 5L, useBytes = TRUE) : cannot open the connection
+"

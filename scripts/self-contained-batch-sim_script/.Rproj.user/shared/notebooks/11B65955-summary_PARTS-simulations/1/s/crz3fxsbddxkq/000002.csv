@@ -1,0 +1,5 @@
+"0","sim2.1_time <- colSums(rbind(sim2.1a_time, sim2.1b_time, sim2.1c_time))[, 1:3]
+"
+"2","Error in colSums(rbind(sim2.1a_time, sim2.1b_time, sim2.1c_time))[, 1:3] : 
+  incorrect number of dimensions
+"

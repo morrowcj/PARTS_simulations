@@ -1,0 +1,2 @@
+"0","# tmp %>% ggplot(aes(x = value, fill = coefficient)) + geom_histogram(bins = 50) + facet_wrap(~map.width, labeller = ""label_both"") + labs(x = ""estimate"")"
+"0","# tmp %>% ggplot(aes(x = pval, fill = coefficient)) + geom_histogram(bins = 50) + facet_wrap(~map.width)"

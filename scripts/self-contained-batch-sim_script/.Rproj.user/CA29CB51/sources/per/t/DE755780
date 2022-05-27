@@ -1,0 +1,24 @@
+{
+    "id": "DE755780",
+    "path": "/media/morrowcj/Vacuole/Maximus_R/PARTS-sim_scripts/simulation-functions_morrowcj.R",
+    "project_path": "simulation-functions_morrowcj.R",
+    "type": "r_source",
+    "hash": "2939697180",
+    "contents": "",
+    "dirty": false,
+    "created": 1624505606794.0,
+    "source_on_save": false,
+    "relative_order": 3,
+    "properties": {
+        "cursorPosition": "179,51",
+        "scrollLine": "0"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1624550876,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1624550876765,
+    "read_only": false,
+    "read_only_alternatives": []
+}

@@ -1,0 +1,4 @@
+"0","sim2.fig %+% "
+"0","  scale_color_manual(values = c(""black"", ""grey50""), labels = c(expression(beta[0]), expression(beta[1])) ) %+%"
+"0","  labs(x = ""Land patch granularity"", subtitle = ""Simulation study 2"", col = NULL) %+%"
+"0","  theme(legend.position = c(.95, .9))"

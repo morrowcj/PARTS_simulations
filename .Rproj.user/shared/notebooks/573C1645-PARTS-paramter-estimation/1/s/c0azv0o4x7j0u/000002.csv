@@ -1,0 +1,2 @@
+"0","library(ggplot2); library(dplyr)"
+"0","theme_set(theme_classic() + theme(strip.background = element_blank()))"

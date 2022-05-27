@@ -1,0 +1,2 @@
+"0","# add nugget line and legend"
+"0","abline(h = nug, col = ""forestgreen"", lty = 2)"

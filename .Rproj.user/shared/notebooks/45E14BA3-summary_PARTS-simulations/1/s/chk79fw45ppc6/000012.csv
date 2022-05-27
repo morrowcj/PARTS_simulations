@@ -1,0 +1,7 @@
+"0","getdf(sim2.3) %>% "
+"0","  mutate(coef.dif = ifelse(coefficient == ""land1"", "
+"0","                           gamma - estimate, gamma - estimate)) %>% "
+"0","  filter(coefficient != ""land1"") %>% "
+"0","  ggplot(aes(x = temp.r, y = -log10(pval))) +"
+"0","  geom_point() + "
+"0","  facet_wrap(~ AR_W)"

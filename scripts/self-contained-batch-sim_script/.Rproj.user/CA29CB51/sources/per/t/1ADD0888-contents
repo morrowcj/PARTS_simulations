@@ -1,0 +1,124 @@
+---
+title: "remotePARTs Simulations"
+author: "Clay Morrow"
+date: "6/23/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Simulations
+
+```{r}
+# B1*u1 + B2*u2 + R1*r1 + (p0 + p1*u1 + p2*u2 + R2*r2)*t + (g1 + R3*r3)*w1(t) + e(t)
+# X(t) = lambda*land + S1*r1 + (alpha + beta*land + S2*r2 )*t + (gamma + S3*r3)*temp(t) e(t)
+# 
+```
+
+1) Spatial Only
+
+  * T = 1
+  
+  * varying map sizes: e.g., 10K, 20K, 40K, 80K
+  
+  * fixed extent of **u**
+  
+  * test that beta1 = 0 and beta2 = beta1
+  
+  * plot estimates of beta1 with standard errors
+  
+  * **p** = **R2** = **g** = **R3** = 0
+  
+```{r}
+source("scripts/simulation-functions_morrowcj.R")
+sims = 10 # start small to test
+```
+
+With this first simulation we ask "Does a map size affect coefficient estimates?"
+  
+```{r sim_1}
+if(TRUE){
+  sim1_time <- system.time(expr = {
+    sim1 = sim_PARTs(map.width = c(104, 144, 200, 280), # varying map size
+                     ntime = 1, # spatial only
+                     land.grid = 2, # fixed land class extent.
+                     lambda = .2, S1 = 0, # constant effect of land class
+                     alpha = 0, beta = 0.2, S2 = 0, # effect of time in beta only
+                     gamma = 0, S3 = 0, # no effect of climate
+                     r = .05, # constant spatial range of ~ <5%
+                     nug = 0.1, # constant nugget
+                     AR = .2, MA = 0, # constant AR and MA parameters
+                     fixed_temp = TRUE, fixed_r2 = TRUE, fixed_r3 = TRUE, # fix to avoid recalculating
+                     par.sims = sims, # number of simulations per map
+                     npart = NA, partsize = 2000, # partitions are 2000px for each map size
+                     GLS.resp = "time", # estimate effects on time in GLS
+                     ncores = 10, verbose = TRUE, debug = FALSE
+    )
+  })
+  sim1_time
+  save(sim1, sim1_time, file = "data/sim1.RData")
+} else{
+  load("data/sim1.RData")
+}
+```
+
+I need to fix the r estimation.
+
+```{r, fig.asp = 1}
+library(ggplot2)
+L = sim1
+df = L$sim.table %>% cbind(lapply(L$GLS, function(x){x$overall_stats$coefmean}) %>% bind_rows())
+df.melt <- df %>%
+  # mutate(time.eff = `(Intercept)` + land1)
+  reshape2::melt(measure.vars = grep(pattern = "(\\(Intercept\\))|(^land1)",
+                                     x = names(df), value = TRUE),
+                 variable.name = "coefficient", value.name = "estimate")
+
+df.melt %>% 
+  ggplot(aes(x = factor(map.width), y = estimate, col = coefficient)) +
+  theme_classic() +
+  geom_hline(yintercept = c(0, unique(df.melt$beta)), lty = 2, col = "grey50") +
+  stat_summary(size = .25) + stat_summary(geom = "line", aes(group = coefficient)) +
+  labs(x = "Map Width", y = "Estimate")
+```
+  
+  
+2) Variable land patch sizes
+
+  * T = 30
+  
+  * map size = 10K
+  
+  * variable extent of **u**
+  
+  * test that p1 = 0 and p1 = p2
+  
+  * **g** = **R3** = 0
+  
+3) Effect of spatio-temporal predictor 
+
+  * T = 30
+  
+  * map size = 10K
+  
+  * fixed extent of **u**
+  
+  * test that g1 = 0
+  
+  * **p** = **R2** = 0
+  
+  * variable **R2** if spatial mean of **r2** is 0.
+  
+4) Effect on Type I errors (p1 = 0 and p1 = p2)
+
+  * variable **w**, all else constant
+  
+  * variable **r2**, all else constant
+  
+  * variable **r1**, all else constant
+  
+  * variable range parameter in **e(t)**, all else constant
+  
+  * spatially variable **rho** (2D sin wave), all else equal

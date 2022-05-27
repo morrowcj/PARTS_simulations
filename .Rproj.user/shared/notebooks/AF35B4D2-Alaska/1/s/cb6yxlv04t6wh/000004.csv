@@ -1,0 +1,2 @@
+"0","legend(x = ""bottomright"", fill = c(""darkorchid3"", ""darkorange"", ""forestgreen""),"
+"0","       legend = levels(ndvi_AK3000$land), title = ""land class"")"

@@ -1,0 +1,4 @@
+"0","# perform time series analysis for each site (no intercept)"
+"0","fm.cls <- fitCLS.map(X, t = time.scaled, ret_xi.coef = TRUE) # can be slow"
+"0",""
+"0","rel.est <- with(fm.cls, time.coef[,""Est""]/mean) # relative estimate"

@@ -1,0 +1,2 @@
+"0","## Effect of time:"
+"0","head(fm.cls$time.coef, n = 5)"

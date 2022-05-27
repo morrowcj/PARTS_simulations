@@ -1,0 +1,7 @@
+"0","library(knitr)"
+"0","knitr::opts_chunk$set("
+"0","  collapse = TRUE,"
+"0","  comment = ""#>"", "
+"0","  fig.width = 5, fig.asp = 1, cache = FALSE,"
+"0","  cache.extra = rand_seed # attempt to cache random seed for reproduction "
+"0",")"

@@ -1,0 +1,4 @@
+"0","# calculate distance matrix (km) to use later"
+"0","D = geosphere::distm(location)/1000"
+"0","## Fit variance matrix"
+"0","V <- fitV(D, spatialcor = r.est$spatialcor, method = meth)"

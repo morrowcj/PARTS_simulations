@@ -1,0 +1,4 @@
+"0","land.col = c(""darkorchid3"", ""darkorange"", ""forestgreen"")[as.numeric(ndvi_AK3000$land)]"
+"0","plot(y = ndvi_AK3000$lat, x = ndvi_AK3000$lng, pch = 15, cex = .5,"
+"0","     col = land.col, xlab = ""longitude"", ylab = ""latitude"", "
+"0","     main = ""Alaska land classes"")"

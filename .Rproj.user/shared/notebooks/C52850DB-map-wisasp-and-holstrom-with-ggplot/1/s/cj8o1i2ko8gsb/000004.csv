@@ -1,0 +1,5 @@
+"0",""
+"0","wisasp.plot +  "
+"0","  geom_point(data = holst.subset, aes(col = group)) + "
+"0","  geom_text(data = holst.subset, nudge_x = .5, size = 4,"
+"0","            aes(label = Genet, col = group), show.legend = FALSE)"

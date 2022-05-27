@@ -1,0 +1,7 @@
+"0","## get model matrix from formula"
+"0","# full model"
+"0","form = ""rel.est ~ 0 + land"" "
+"0","mod.mat <- model.matrix(object = formula(form), data = ndvi_AK3000)"
+"0","# null model "
+"0","form0 = ""rel.est ~ 1"" #(intercept only)"
+"0","X0 <- model.matrix(object = formula(form0), data = ndvi_AK3000)"

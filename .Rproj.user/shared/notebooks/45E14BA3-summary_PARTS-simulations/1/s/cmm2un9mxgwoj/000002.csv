@@ -1,0 +1,51 @@
+"0","# X(t) = lambda*land + S1*r1 + (alpha + beta*land + S2*r2 )*t + (gamma + S3*r3)*temp(t) e(t)"
+"0",""
+"0","load(""scripts/self-contained-batch-sim_script/sim-data/19-Jun_simulations/01_PARTS_sim-study.RData"", "
+"0","     verbose = TRUE)"
+"1","Loading objects:
+"
+"1","  "
+"1","sim1
+"
+"1","  "
+"1","sim1_time
+"
+"0","load(""scripts/self-contained-batch-sim_script/sim-data/19-Jun_simulations/02_PARTS_sim-study.RData"", "
+"0","     verbose = TRUE)"
+"1","Loading objects:
+"
+"1","  "
+"1","sim2
+"
+"1","  "
+"1","sim2_time
+"
+"0","load(""scripts/self-contained-batch-sim_script/sim-data/19-Jun_simulations/03_PARTS_sim-study.RData"", "
+"0","     verbose = TRUE)"
+"1","Loading objects:
+"
+"1","  "
+"1","sim3
+"
+"1","  "
+"1","sim3_time
+"
+"0","load(""scripts/self-contained-batch-sim_script/sim-data/19-Jun_simulations/04_PARTS_sim-study.RData"", "
+"0","     verbose = TRUE)"
+"1","Loading objects:
+"
+"1","  "
+"1","sim4a
+"
+"1","  "
+"1","sim4b
+"
+"1","  "
+"1","sim4c
+"
+"1","  "
+"1","sim4d
+"
+"1","  "
+"1","sim4_time
+"

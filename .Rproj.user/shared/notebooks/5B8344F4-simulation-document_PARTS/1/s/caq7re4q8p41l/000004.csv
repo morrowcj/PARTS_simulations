@@ -1,0 +1,5 @@
+"0","d = scales::rescale(as.matrix(dist(as.matrix(coords))), to = c(0, 1))"
+"0","prop.zero = .6"
+"0","wend.range = quantile(covmat, probs = prop.zero) # 25% of cells should be zero"
+"2","Error in quantile(covmat, probs = prop.zero) : object 'covmat' not found
+"

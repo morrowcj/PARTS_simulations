@@ -1,0 +1,2 @@
+"0",""
+"0","curve(taper.sphr(x, .04), from = 0, to = 0.1, n = 101, add = TRUE, col = ""blue"")"

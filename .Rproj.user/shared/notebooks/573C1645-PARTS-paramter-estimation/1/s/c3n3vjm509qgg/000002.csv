@@ -1,0 +1,8 @@
+"0","set.seed(915)"
+"0",""
+"0","# 3) Generate spatio-temporal errors (ARMA(1)) using our spatial errors"
+"0","epsilon = t(rbind(apply(X = t(del), MARGIN = 2,"
+"0","              function(e){"
+"0","                arima.sim(n = ntime,"
+"0","                          model = list(ar = .5, ma = 0, innov = e))"
+"0","              })))"

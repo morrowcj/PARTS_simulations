@@ -1,0 +1,477 @@
+#!/usr/bin/env Rscript
+
+# load libraries
+require(reshape2)
+library(getopt)
+
+##
+# Parse Arguments ----
+##
+
+## Parse command arguments #0: no args, 1: mandatory args, 2: optional args
+spec = matrix(c(
+  'help'   , 'h', 0, "logical",
+  'debug'  , 'u', 0, "logical",
+  "cores"  , "c", 1, "integer",
+  "testrun", "t", 0, "logical",
+  "notrun" , "n", 0, "logical",
+  "notone" , "i", 0, "logical",
+  "nottwo" , "j", 0, "logical",
+  "notthree","k", 0, "logical",
+  "notfour", "l", 0, "logical",
+  "makefigs","f", 0, "logical"),
+  ncol = 4, byrow = TRUE)
+opt = getopt(spec)
+
+## help was asked for - immediately exit
+if ( !is.null(opt$help) ) {
+  cat(getopt(spec, usage = TRUE))
+  q(status=1);
+}
+
+## defaulf values
+if (is.null(opt$debug)) {opt$debug = FALSE}
+if (is.null(opt$testrun)) {opt$testrun = FALSE}
+if (is.null(opt$cores)) {opt$cores = 2}
+if (is.null(opt$notrun)) {opt$notrun = FALSE}
+if (is.null(opt$notone)) {opt$notone = FALSE}
+if (is.null(opt$nottwo)) {opt$nottwo = FALSE}
+if (is.null(opt$notthree)) {opt$notthree = FALSE}
+if (is.null(opt$notfour)) {opt$notfour = FALSE}
+if (is.null(opt$makefigs)) {opt$makefigs = FALSE}
+
+
+## debug mode
+if (opt$debug) {
+  cat("debug mode\n")
+}
+
+##
+# Setup ----
+##
+
+sims.default = 200 # change this number to do more sims.
+
+## Function to get root dir of this script
+thisFile <- function() {
+  cmdArgs <- commandArgs(trailingOnly = FALSE)
+  needle <- "--file="
+  match <- grep(needle, cmdArgs)
+  if (length(match) > 0) {
+    # Rscript
+    return(normalizePath(sub(needle, "", cmdArgs[match])))
+  } else {
+    # 'source'd via R console
+    return(normalizePath(sys.frames()[[1]]$ofile))
+  }
+}
+
+# save the root directory
+if (rstudioapi::isAvailable()) { # within Rstudio
+  base.dir = dirname(rstudioapi::getActiveDocumentContext()$path)
+} else { # within Rterm or Rscript
+  base.dir = dirname(thisFile())
+}
+
+# source the simulation function file
+source(file.path(base.dir, "simulation-functions_morrowcj.R"))
+
+
+
+##
+# Study 1 ----
+##
+#
+# X(t) = lambda*land + S1*r1 + (alpha + beta*land + S2*r2 )*t + (gamma + S3*r3)*temp(t) e(t)
+#
+# 1) Spatial Only
+# * T = 1
+# * varying map sizes: e.g., 10K, 20K, 40K, 80K
+# * fixed extent of land
+# * test that lambda0 = 0 and lambda1 = lambda0
+# * plot estimates of lambda with standard errors
+# * alpha = beta = S2 = g = S3 = 0
+
+if (!opt$notrun & !opt$notone) {
+
+  cat("\nSim study 1\n")
+
+  # if --testrun is supplied, make data small
+  if (opt$testrun) {map.width = c(32, 40)} else {map.width = c(104, 144, 200, 280)}
+  if (opt$testrun) {sims = 4} else {sims = sims.default}
+  if (opt$testrun) {partsize = 100} else {partsize = 2000}
+  if (opt$testrun) {fitr.n = 100} else {fitr.n = 1000}
+
+
+  if(!dir.exists(file.path(base.dir,"sim-data"))){
+    dir.create(file.path(base.dir, "sim-data"))
+  }
+
+  sim1_time <- system.time(expr = {
+    sim1 = sim_PARTs(map.width = map.width, # varying map size
+                     ntime = 1, # spatial only
+                     land.grid = 2, # fixed land class extent.
+                     lambda = 0, S1 = 0, # no effect of land class
+                     alpha = 0, beta = 0.0, S2 = 0, # no effect of time
+                     gamma = 0, S3 = 0, # no effect of climate
+                     r = .05, # constant spatial range of ~ <5%
+                     fitr.n = fitr.n,
+                     nug = 0.1, # constant nugget
+                     AR = .2, MA = 0, # constant AR and MA parameters
+                     fixed_temp = TRUE, fixed_r2 = TRUE, fixed_r3 = TRUE, # fix to avoid recalculating
+                     par.sims = sims, # number of simulations per map
+                     npart = NA, partsize = partsize, # partitions are 2000px for each map size
+                     GLS.resp = "(Intercept)", # estimate effects on time in GLS
+                     ncores = opt$cores, verbose = opt$debug, debug = FALSE
+    )
+  })
+
+  if(opt$debug){cat("sim 1 time:", sim1_time[1], "\n")}
+  if (!opt$testrun){
+    save(sim1, sim1_time, file = "sim-data/01_PARTS_sim-study.RData")
+  }
+} else{
+  load("sim-data/01_PARTS_sim-study.RData")
+}
+
+##
+# Study 2 ----
+##
+#
+# X(t) = lambda*land + S1*r1 + (alpha + beta*land + S2*r2 )*t + (gamma + S3*r3)*temp(t) e(t)
+#
+# 2) Variable land patch sizes
+# * t = 1:30
+# * map size = 10K
+# * variable extent of land
+# * test that beta0 = 0 and beta1 = beta0
+# * gamma = S3 = 0
+# * lambda = 0.1; S1 = 0
+
+if (!opt$notrun & !opt$nottwo) {
+
+  cat("\nSim study 2\n")
+
+  # if --testrun is supplied, make simulation data small
+  if (opt$testrun) {map.width = 32} else {map.width = 104}
+  if (opt$testrun) {sims = 4} else {sims = sims.default}
+  if (opt$testrun) {partsize = 100} else {partsize = 2000}
+  if (opt$testrun) {fitr.n = 100} else {fitr.n = 1000}
+
+  sim2_time <- system.time(expr = {
+    sim2 = sim_PARTs(map.width = map.width, # varying map size
+                     ntime = 30, # temporal
+                     land.grid = c(2, 8), # variable land class extent.
+                     lambda = .1, S1 = 0, # fixed effect of land class intercept
+                     alpha = 0, beta = 0.0, S2 = 0, # no effect of time
+                     gamma = 0, S3 = 0, # no effect of climate
+                     r = .05, # constant spatial range of ~ <5%
+                     fitr.n = fitr.n,
+                     nug = 0.1, # constant nugget
+                     AR = .2, MA = 0, # constant AR and MA parameters
+                     fixed_temp = TRUE, fixed_r1 = TRUE, fixed_r2 = TRUE, fixed_r3 = TRUE, # fix to avoid recalculating
+                     par.sims = sims, # number of simulations per map
+                     npart = NA, partsize = partsize, # partitions are 2000px for each map size
+                     GLS.resp = "time", # estimate effects on time in GLS
+                     ncores = opt$cores, verbose = opt$debug, debug = FALSE
+    )
+  })
+
+  if(opt$debug){cat("sim 2 time:", sim2_time[1], "\n")}
+  if (!opt$testrun) {
+    save(sim2, sim2_time, file = "sim-data/02_PARTS_sim-study.RData")
+  }
+} else{
+  load("sim-data/02_PARTS_sim-study.RData")
+}
+
+##
+# Study 3 ----
+##
+#
+# X(t) = lambda*land + S1*r1 + (alpha + beta*land + S2*r2 )*t + (gamma + S3*r3)*temp(t) e(t)
+#
+# 3) Effect of spatio-temporal predictor
+# * T = 30
+# * map size = 10K
+# * fixed extent of land
+# * test that gamma = 0
+# * 1) alpha = beta = 0
+# * 2) S2 = c(0, .1)
+
+if (!opt$notrun & !opt$notthree) {
+  cat("\nSim study 3\n")
+
+  # if --testrun is supplied, make simulation data small
+  if (opt$testrun) {map.width = 32} else {map.width = 104}
+  if (opt$testrun) {sims = 4} else {sims = sims.default}
+  if (opt$testrun) {partsize = 100} else {partsize = 2000}
+  if (opt$testrun) {fitr.n = 100} else {fitr.n = 1000}
+
+
+  sim3_time <- system.time(expr = {
+    sim3 = sim_PARTs(map.width = map.width, # varying map size
+                     ntime = 30, # temporal
+                     land.grid = 2, # fixed land class extent.
+                     lambda = .1, S1 = 0, # fixed effect of land class intercept
+                     alpha = 0, beta = 0.0, # no effect of time
+                     S2 = c(0, .1), # variable effect of r2
+                     gamma = 0, S3 = 0, # no effect of climate
+                     r = .05, # constant spatial range of ~ <5%
+                     fitr.n = fitr.n,
+                     nug = 0.1, # constant nugget
+                     AR = .2, MA = 0, # constant AR and MA parameters
+                     fixed_r1 = TRUE, fixed_r3 = TRUE, # fix to avoid recalculating
+                     fixed_r2 = FALSE, fixed_temp = FALSE, # calculate random variables r1 and Temp
+                     par.sims = sims, # number of simulations per map
+                     npart = NA, partsize = partsize, # partitions are 2000px for each map size
+                     GLS.resp = "z", # estimate effects on time in GLS
+                     ncores = opt$cores, verbose = opt$debug, debug = FALSE
+    )
+  })
+
+  if(opt$debug){cat("sim 3 time:", sim3_time[1], "\n")}
+  if (!opt$testrun) {
+    save(sim3, sim3_time, file = "sim-data/03_PARTS_sim-study.RData")
+  }
+} else{
+  load("sim-data/03_PARTS_sim-study.RData")
+}
+
+##
+# Study 4 ----
+##
+#
+# B1*u1 + B2*u2 + R1*r1 + (p0 + p1*u1 + p2*u2 + R2*r2)*t + (g1 + R3*r3)*w1(t) + e(t)
+# X(t) = lambda*land + S1*r1 + (alpha + beta*land + S2*r2 )*t + (gamma + S3*r3)*temp(t) e(t)
+#
+# 4) Effect on Type I errors (beta0 = 0 and beta1 = beta0)
+# * a) variable S3, all else constant
+# * b) variable S2, all else constant
+# * c) variable S1, all else constant
+# * d) variable range parameter in e(t), all else constant
+# * e) (I don't know how to do this one) spatially variable AR in e(t) (2D sin wave), all else equal
+
+if (!opt$notrun & !opt$notfour) {
+  cat("\nSim study 4\n")
+
+  # if --testrun is supplied, make simulation data small
+  if (opt$testrun) {map.width = 32} else {map.width = 104}
+  if (opt$testrun) {sims = 4} else {sims = sims.default}
+  if (opt$testrun) {partsize = 100} else {partsize = 2000}
+  if (opt$testrun) {fitr.n = 100} else {fitr.n = 1000}
+
+  ## S3: fixed temp
+  sim4_time <- system.time(expr = {
+    cat("   a\n")
+    sim4a = sim_PARTs(map.width = map.width, # varying map size
+                      ntime = 30, # temporal
+                      land.grid = 2, # fixed land class extent.
+                      lambda = 0.1, S1 = 0, # fixed effect of land class intercept
+                      alpha = 0, beta = 0.0, # no effect of time
+                      S2 = 0, # no effect of r2
+                      gamma = 0, S3 = c(0, 0.1), # random effect of climate
+                      r = .05, # constant spatial range of ~ <5%
+                      fitr.n = fitr.n,
+                      nug = 0.1, # constant nugget
+                      AR = .2, MA = 0, # constant AR and MA parameters
+                      fixed_r1 = TRUE, fixed_r2 = TRUE, # fix to avoid recalculating
+                      fixed_r3 = FALSE, fixed_temp = FALSE, # calculate random variables r1 and Temp
+                      par.sims = sims, # number of simulations per map
+                      npart = NA, partsize = partsize, # partitions are 2000px for each map size
+                      GLS.resp = "time", # estimate effects on time in GLS
+                      ncores = opt$cores, verbose = opt$debug, debug = FALSE
+    )
+    ## S2
+    cat("\n   b\n")
+    sim4b = sim_PARTs(map.width = map.width, # varying map size
+                      ntime = 30, # temporal
+                      land.grid = 2, # fixed land class extent.
+                      lambda = 0.1, S1 = 0, # fixed effect of land class intercept
+                      alpha = 0, beta = 0.0, # no effect of time
+                      S2 = c(0, .1), # variable effect of r2
+                      gamma = 0, S3 = 0, # random effect of climate
+                      r = .05, # constant spatial range of ~ <5%
+                      fitr.n = fitr.n,
+                      nug = 0.1, # constant nugget
+                      AR = .2, MA = 0, # constant AR and MA parameters
+                      fixed_r1 = TRUE, fixed_r3 = TRUE, fixed_temp = TRUE, # fix to avoid recalculating
+                      fixed_r2 = FALSE, # calculate random variables r2
+                      par.sims = sims, # number of simulations per map
+                      npart = NA, partsize = partsize, # partitions are 2000px for each map size
+                      GLS.resp = "time", # estimate effects on time in GLS
+                      ncores = opt$cores, verbose = opt$debug, debug = FALSE
+    )
+    ## S1
+    cat("\n   c\n")
+    sim4c = sim_PARTs(map.width = map.width, # varying map size
+                      ntime = 30, # temporal
+                      land.grid = 2, # fixed land class extent.
+                      lambda = 0.1, # fixed effect of land class intercept
+                      S1 = c(0, 0.1),
+                      alpha = 0, beta = 0.0, # no effect of time
+                      S2 = 0, # variable effect of r2
+                      gamma = 0, S3 = 0, # random effect of climate
+                      r = .05, # constant spatial range of ~ <5%
+                      fitr.n = fitr.n,
+                      nug = 0.1, # constant nugget
+                      AR = .2, MA = 0, # constant AR and MA parameters
+                      fixed_r2 = TRUE, fixed_r3 = TRUE, fixed_temp = TRUE, # fix to avoid recalculating
+                      fixed_r1 = FALSE, # calculate random variables r1
+                      par.sims = sims, # number of simulations per map
+                      npart = NA, partsize = partsize, # partitions are 2000px for each map size
+                      GLS.resp = "time", # estimate effects on time in GLS
+                      ncores = opt$cores, verbose = opt$debug, debug = FALSE
+    )
+    #r
+    cat("\n   d\n")
+    sim4d = sim_PARTs(map.width = map.width, # varying map size
+                      ntime = 30, # temporal
+                      land.grid = 2, # fixed land class extent.
+                      lambda = 0.1, # fixed effect of land class intercept
+                      S1 = 0,
+                      alpha = 0, beta = 0.0, # no effect of time
+                      S2 = 0, # variable effect of r2
+                      gamma = 0, S3 = 0, # random effect of climate
+                      r = c(0.001, 0.05, 0.1), # variable spatial range of ~ <5%
+                      fitr.n = fitr.n,
+                      nug = 0.1, # constant nugget
+                      AR = .2, MA = 0, # constant AR and MA parameters
+                      fixed_r2 = TRUE, fixed_r3 = TRUE, fixed_temp = TRUE, # fix to avoid recalculating
+                      fixed_r1 = FALSE, # calculate random variables r1
+                      par.sims = sims, # number of simulations per map
+                      npart = NA, partsize = partsize, # partitions are 2000px for each map size
+                      GLS.resp = "time", # estimate effects on time in GLS
+                      ncores = opt$cores, verbose = opt$debug, debug = FALSE
+    )
+
+    cat("\n")
+  })
+
+  if(opt$debug){cat("sim 4 time:", sim4_time[1], "\n")}
+  if (!opt$testrun){
+    save(sim4a, sim4b, sim4c, sim4d, sim4_time, file = "sim-data/04_PARTS_sim-study.RData")
+  }
+} else{
+  load("sim-data/04_PARTS_sim-study.RData")
+}
+
+## Make figures ----
+if (opt$makefigs) {
+
+  fig.width = 6 # inches
+
+  if(!dir.exists(file.path(base.dir, "sim-figures"))){
+    dir.create(file.path(base.dir, "sim-figures"))
+  }
+
+  library(ggplot2); library(dplyr)
+  ## Function to create plotting data frame
+  getdf <- function(L){
+    df = L$sim.table %>%
+      cbind(lapply(L$GLS, function(x){x$overall_stats$coefmean}) %>% bind_rows())
+    df$p.int = lapply(L$GLS, function(x)x$t.pval[1, "pval.t"]) %>% unlist()
+    df$p.land1 = lapply(L$GLS, function(x)x$t.pval[2, "pval.t"]) %>% unlist()
+    df.melt = df %>%
+      reshape2::melt(measure.vars = c("(Intercept)", "land1"),
+                     variable.name = "coefficient", value.name = "estimate") %>%
+      reshape2::melt(measure.vars = c("p.int", "p.land1"),
+                     variable.name = "ptype", value.name = "pval") %>%
+      filter(!(coefficient == "(Intercept)" & ptype == "p.land1"),
+             !(coefficient == "land1" & ptype == "p.int")) %>%
+      mutate(sig = (pval <= 0.05)) %>%
+      unique() %>%
+      arrange(simID, map.width) %>%
+      # select(coefficient, ptype, estimate, pval)
+      select(-ptype)
+    return(df.melt)
+  }
+
+  ## Sim 1
+  simplot <- function(obj, coef.name = "lambda", xvar = "map.width", ttl = "Sim study 1"){
+    obj.df = getdf(obj) %>%
+      mutate(coefficient = factor(coefficient, levels = c("(Intercept)", "land1"),
+                                  labels = paste0(coef.name, 0:1))) %>%
+      reshape2::melt(measure.vars = c("estimate", "sig")) %>%
+      mutate(variable = factor(variable, levels = c("estimate", "sig"),
+                               labels = c("coef estimate", "prop sig tests")))
+
+    obj.fig = obj.df %>%
+      ggplot(aes(x = as.factor(get(xvar)), y = value, col = coefficient)) +
+      geom_hline(data = data.frame(variable = c("coef estimate", "prop sig tests"),
+                                   val = c(0, 0.05)),
+                 aes(yintercept = val), lty = 2, col = "grey80") +
+      stat_summary(fun.data = "mean_se", geom = "errorbar", width = .05,
+                   position = position_dodge(width = .1), alpha = .5) +
+      stat_summary(fun.data = "mean_se", geom = "point", size = 1,
+                   position = position_dodge(width = .1)) +
+      stat_summary(fun.data = "mean_se", geom = "line", aes(group = coefficient),
+                   position = position_dodge(width = .1), alpha = .5) +
+      theme_classic() +
+      theme(strip.background = element_blank(), strip.placement = "outside",
+            text = element_text(size = 10),
+            title = element_text(size = 10),
+            strip.text = element_text(size = 10),
+            legend.text = element_text(size = 10)) +
+      facet_wrap(~ variable, scales = "free", strip.position = "left") +
+      labs(x = xvar, y = NULL,
+           subtitle = ttl)
+
+    return(obj.fig)
+  }
+
+  # sim1
+  (sim1.fig <- simplot(obj = sim1, xvar = "map.width", coef.name = "lambda",
+                       ttl = "sim study #1"))
+  # sim2
+  (sim2.fig <- simplot(obj = sim2, xvar = "land.grid", coef.name = "beta",
+                       ttl = "sim study #2"))
+  # sim3
+  (sim3.fig <- simplot(obj = sim3, xvar = "S2", coef.name = "gamma",
+                       ttl = "sim study #3"))
+  # sim4
+  (sim4a.fig <- simplot(obj = sim4a, xvar = "S3", coef.name = "beta",
+                        ttl = "sim study #4a"))
+  (sim4b.fig <- simplot(obj = sim4b, xvar = "S2", coef.name = "beta",
+                        ttl = "sim study #4b"))
+  (sim4c.fig <- simplot(obj = sim4c, xvar = "S1", coef.name = "beta",
+                        ttl = "sim study #4c"))
+  (sim4d.fig <- simplot(obj = sim4d, xvar = "r", coef.name = "lambda",
+                        ttl = "sim study #4d"))
+
+  ## save figures
+  png(filename = file.path(base.dir, "sim-figures", "simfig_%03d.png"), width = fig.width,
+      height = fig.width/2.5, units = "in", res = 600)
+  plot(sim1.fig)
+  plot(sim2.fig)
+  plot(sim3.fig)
+  plot(sim4a.fig)
+  plot(sim4b.fig)
+  plot(sim4c.fig)
+  plot(sim4d.fig)
+  dev.off()
+}
+
+# ```{r, fig.asp = 1}
+# library(ggplot2)
+# L = sim1
+# df = L$sim.table %>% cbind(lapply(L$GLS, function(x){x$overall_stats$coefmean}) %>% bind_rows())
+# df.melt <- df %>%
+#   # mutate(time.eff = `(Intercept)` + land1)
+#   reshape2::melt(measure.vars = grep(pattern = "(\\(Intercept\\))|(^land1)",
+#                                      x = names(df), value = TRUE),
+#                  variable.name = "coefficient", value.name = "estimate")
+#
+# df.melt %>%
+#   ggplot(aes(x = factor(map.width), y = estimate, col = coefficient)) +
+#   theme_classic() +
+#   geom_hline(yintercept = c(0, unique(df.melt$beta)), lty = 2, col = "grey50") +
+#   stat_summary(size = .25) + stat_summary(geom = "line", aes(group = coefficient)) +
+#   labs(x = "Map Width", y = "Estimate")
+# ```
+
+## End ----
+
+if (! interactive()){
+  quit(status = 0)
+}

@@ -1,0 +1,4 @@
+"0","sim1.fig %+% "
+"0","  scale_color_manual(values = c(""black"", ""grey50""), labels = c(expression(lambda[0]), expression(lambda[1])) ) %+%"
+"0","  labs(x = ""Map width (pixels)"", subtitle = ""Simulation study 1"", col = NULL) %+%"
+"0","  theme(legend.position = c(.95, .9))"

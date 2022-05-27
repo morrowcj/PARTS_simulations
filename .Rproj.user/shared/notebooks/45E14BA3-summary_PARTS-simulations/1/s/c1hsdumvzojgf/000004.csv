@@ -1,0 +1,4 @@
+"0","sim4a.fig %+%"
+"0","  scale_color_manual(values = c(""black"", ""grey50""), labels = c(expression(beta[0]), expression(beta[1])) ) %+%"
+"0","  labs(x = expression(psi[3]), subtitle = ""Simulation study 4(a)"", col = NULL) %+%"
+"0","  theme(legend.position = c(.95, .9))"

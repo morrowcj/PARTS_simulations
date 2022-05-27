@@ -1,0 +1,6 @@
+"0","## add in the nugget to make the covariance matrix"
+"0","  # Note that the ""partial sil"" is sil - nug in spatial statistics"
+"0","  # and a semivariogram is just 1 - covariance"
+"0","curve(1 - ((1-nug)*covar_func(x)), from = 0, to = 1,"
+"0","      ylab = ""covariance"", xlab = ""distance"", main = ""Semivariogram"","
+"0","      ylim = c(0,1))"

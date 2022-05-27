@@ -1,0 +1,7 @@
+"0",""
+"0","ggplot(X.data, aes(x = time, y = value, col = as.factor(land))) +"
+"0","  geom_point(alpha = .2, size = 1, position = position_jitter(width = .05)) + "
+"0","  # stat_summary(fun.y = ""mean"", geom = ""point"") +"
+"0","  # stat_summary(fun.y = ""mean"", geom = ""line"") +"
+"0","  geom_smooth(method = ""lm"", formula = y ~ x, aes(group = land), alpha = .2) +"
+"0","  labs(y = ""X"", col = ""land"", title = ""Land:time interaction"")"

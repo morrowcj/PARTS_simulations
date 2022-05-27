@@ -1,0 +1,458 @@
+---
+title: "Parts Simulation Study"
+author: "Clay Morrow"
+date: "5/6/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+```
+
+
+Simulation Model:
+
+$$x(t) = \beta_1 u_1 + \beta_2 u_2 + R_1 r_1 + (p_1 u_1 + p_2 u_2 + R_2 r_2) t + (g_1 + R_3 r_3) w_1(t) + \varepsilon(t) $$
+
+* **x(t)**: pixel value at time **t**
+
+* **u**: land classes
+
+* **r**: random spatially correlated effect (unmeasured; 2D sinwave): makes other effects random
+
+* **t**: time point {1, 2, ..., **T**}.
+
+* **w**: spatio-temporal predictor variable (tapered AR, fixed nugget and range parameter)
+
+* **beta**, **p**, **g**, **R**: constant throughout sim studies. 
+
+* **e(t)**: ARMA(1,1) error: 
+
+$$\varepsilon_i(t) = \delta_i(t) + \rho_i \varepsilon_i(t - 1)  + \theta_i \varepsilon_i(t-1)$$
+
+  - **rho**: constant, except in sim study 4
+  
+  - **delta**: spatially correlated (tapered, fixed nugget and range parameter)
+  
+Simulation Studies:
+
+```{r custom_functions}
+# spherical tapering function ----
+taper.sphr <- function(d, theta){
+  ts = ifelse(d > theta, 0, ((1 - d/theta)^2) * (1 + d/(2 * theta)) )
+  return(ts)
+}
+```
+
+```{r taper_sphr_plot, fig.asp = 2/3, fig.width = 5}
+# show taper spherical function with varying thetas
+curve(taper.sphr(x, .02), from = 0, to = 0.1, n = 101, col = "black",
+      main = "Tapering spherical covariance function",
+      ylab = "f(distance, range)", xlab = "distance (% of map)")
+
+curve(taper.sphr(x, .04), from = 0, to = 0.1, n = 101, add = TRUE, col = "blue")
+curve(taper.sphr(x, .06), from = 0, to = 0.1, n = 101, add = TRUE, col = "forestgreen")
+curve(taper.sphr(x, .08), from = 0, to = 0.1, n = 101, add = TRUE, col = "darkorchid3")
+
+legend(x = .075, y = 1, 
+       legend = c("0.02", "0.04", "0.06", "0.08"), 
+       col = c("black", "blue", "forestgreen", "darkorchid3"), 
+       lty = 1, 
+       title = "r")
+```
+
+
+
+  
+```{r}
+## Select map dimensions that are divisible by 2, 4, and 8
+
+x <- 100:300
+y <- x^2
+
+div2 <- x %% 2 == 0
+div4 <- x %% 4 == 0
+div8 <- x %% 8 == 0
+
+indx <- which(div2 & div4 & div8)
+
+row.sizes = c(x[indx][which(abs(y[indx] - 10000) == min(abs(y[indx] - 10000)))],
+              x[indx][which(abs(y[indx] - 20000) == min(abs(y[indx] - 20000)))],
+              x[indx][which(abs(y[indx] - 40000) == min(abs(y[indx] - 40000)))],
+              x[indx][which(abs(y[indx] - 80000) == min(abs(y[indx] - 80000)))])
+
+# rm(x, y, div2, div4, div8)
+
+# row.sizes/2
+# row.sizes/4
+# row.sizes/8
+```
+  
+  
+```{r sim_one_setup}
+# Map parameters ----
+
+# map.rows <- c(100, 150, 200, 280) # map row combinations
+# stopifnot(all((map.rows^2) %% 4 == 0)) # check that the square is divisible by 4
+
+
+
+map.rows = 16
+map.cols = map.rows
+npix = map.rows * map.cols
+
+# simulation paramters ----
+spat.range = .05 # effective range
+nugget = .10
+xsd = 1
+
+# Map calculations ----
+## X, Y coordinates
+coords = as.matrix(expand.grid(x = as.double(1:map.cols), 
+                               y = as.double(1:map.rows)))
+## Distance
+D.time = system.time(D <- scales::rescale(as.matrix(dist(coords)), to = c(0, 1)))
+
+## Covariance matrix
+Sigma <- diag(rep(nugget, npix)) + (1 - nugget) * taper.sphr(D, spat.range)
+
+## Cholesky matrix
+# Chol.time = system.time(Cholmat <- base::chol(Sigma))
+
+Chol.time2 = system.time(invchol <- remotePARTS::invert_chol(Sigma, nugget))
+```
+
+```{r sim_one_landclass, fig.asp = 1, fig.width=4}
+n.size <- map.cols/4
+
+n.cluster <- 2
+
+land.pattern <- matrix(c(1,2,2,1), ncol = 2, nrow = 2)
+
+landclass <- kronecker(
+  kronecker(matrix(1,ncol=n.cluster,nrow=n.cluster), land.pattern), 
+  matrix(1, nrow=n.size, ncol=n.size))
+
+# ggplot(data.frame(coords, landclass), aes(x = x, y = y, fill = landclass)) +
+#   geom_tile(col = "grey50") + theme(legend.position = "none") + labs(title = "landclasses")
+
+```
+
+```{r sim_land_class, fig.asp = 1, fig.width=3}
+## 8x8 blocks w/spatial pattern for land cover classes
+half.pattern <- matrix(c(rep(c(1,0), each = 4, times = 4), rep(c(0, 1), each = 4, times = 4)), ncol = 8, byrow = TRUE)
+
+quarter.pattern <- matrix(rep(c(rep(c(1,0), each = 2, times = 4), rep(c(0,1), each = 2, times = 4)), times = 2), ncol = 8, byrow = TRUE)
+
+eighth.pattern <-  matrix(rep(c(rep(c(1,0), times = 4), rep(c(0,1), times = 4)), times = 4), ncol = 8, byrow = TRUE)
+
+M.expand <- matrix(1, map.cols/8, map.cols/8)
+                   
+half.land = kronecker(half.pattern, M.expand)
+# image(half.land)
+quarter.land = kronecker(quarter.pattern, M.expand)
+# image(quarter.land)
+eighth.land = kronecker(eighth.pattern, M.expand)
+# image(eighth.land)
+
+```
+
+```{r}
+Dr <- t(Sigma)
+```
+
+
+```{r sim_one_params}
+# x(t) = B1*u1 + B2*u2 + R1*r1 + (p1*u1 + p2*u2 + R2*r2)*t + (g1 + R3*r3)*w1(t) + e(t)
+
+npix = 256
+n.time = 6
+AR = 0.2
+MA = 0.1
+burn.in = 1000
+B1 = 0.5 # effect of land class 1 over class 0
+R1 = 0.001
+p0 = 0.3
+p1 = 0.2
+R2 = 0.001
+g1 = 0.2
+R3 = 0.001
+
+time = seq(0,1, length.out = n.time)
+```
+
+```{r sim_one_errors, }
+# spatially correlated errors
+del <- t(scale(Dr %*% rnorm(n = npix)))
+# ARMA errors (ntime columns)
+vareps <- t(rbind(apply(X = del, MARGIN = 2,
+                  function(e){
+                    arima.sim(n = n.time,
+                              model = list(ar = AR, ma = MA, innov = e))
+                  })))
+# dim(vareps)
+```
+
+```{r sim_x}
+# B1*u1 + B2*u2 + R1*r1 + (p0 + p1*u1 + p2*u2 + R2*r2)*t + (g1 + R3*r3)*w1(t) + e(t)
+
+landcover = half.land
+
+# Intercepts
+land.intercept = if(B1 == 0){rep(0, npix)}else{B1*as.vector(landcover)}
+rand.intercept = if(R1 == 0){rep(0, npix)}else{(R1*rnorm(npix))}
+int.effect = land.intercept + rand.intercept
+int.mat = matrix(rep(int.effect, times = n.time), ncol = n.time)
+
+# Cime effects
+land.time = if(p1 == 0){rep(0, npix)}else{p1*as.vector(landcover)}
+rand.time = if(R2 == 0){rep(0, npix)}else{(R2*rnorm(npix))}
+time.effect = (p0 + land.time + rand.time) %*% rbind(time)
+
+# Climate effects
+w.del = t(scale(Dr %*% rnorm(npix)))
+w = t(rbind(apply(X = w.del, MARGIN = 2,
+                  function(e){
+                    arima.sim(n = n.time,
+                              model = list(ar = AR, ma = MA, innov = e))
+                  })))
+clim.par = g1 + if(R3 == 0){rep(0, npix)}else{R3*rnorm(npix)}
+clim.mat = matrix(rep(clim.par, times = n.time), ncol = n.time)
+
+clim.effect = clim.mat*w
+
+X = int.mat + time.effect + clim.effect + vareps
+```
+
+
+```{r, fig.asp = 1, fig.width=8, eval = FALSE}
+W.data = data.frame(coords, land = as.vector(landcover), W = w) %>% 
+  reshape2::melt(id.vars = c("x", "y", "land")) %>% 
+  mutate(time = scales::rescale(as.numeric(variable), to = c(0, 1)))
+
+W.data %>%
+  ggplot(aes(x = x, y = y, fill = value)) +
+  facet_wrap(~variable, ncol = 2) +
+  geom_tile() +
+  # geom_tile(aes(col = as.factor(land)), alpha = 0.1, fill = NA) +
+  scale_fill_viridis_c(option = "magma") +
+  # scale_fill_gradient2(low = "brown", high = "forestgreen", mid = "white") +
+  labs(col = "land", x = "x coord", y = "y coord", title = "Simulated W") +
+  scale_color_manual(values = c("black", "grey80"))
+
+W.data %>% 
+  ggplot(aes(x = variable, y = value, col = as.factor(land))) + 
+  geom_point() + 
+  geom_smooth(method = "lm", formula = y ~ x, aes(group = land), alpha = .2)
+```
+
+```{r, fig.asp = 1, fig.width=8}
+X.data = data.frame(coords, X, land = as.vector(landcover)) %>% 
+  reshape2::melt(id.vars = c("x", "y", "land")) %>% 
+  mutate(time = scales::rescale(as.numeric(variable), to = c(0, 1)))
+
+X.data %>%   
+  ggplot(aes(x = x, y = y, fill = value, col = as.factor(land))) + 
+  facet_wrap(~variable, ncol = 2) + 
+  geom_tile() + 
+  # geom_tile(aes(col = as.factor(land)), alpha = 0.1, fill = NA) +
+  scale_fill_viridis_c(option = "magma") +
+  # scale_fill_gradient2(low = "brown", high = "forestgreen", mid = "white") + 
+  labs(col = "land", x = "x coord", y = "y coord", title = "Simulated data") + 
+  scale_color_manual(values = c("black", "grey80"))
+```
+
+
+
+```{r, fig.width = 4.5, fig.asp = .8}
+tmp <- data.frame(time = time, mean = colMeans(X), sd = apply(X, 2, FUN = sd))
+
+ggplot(tmp, aes(x = time, y = mean)) + 
+  geom_point() + 
+  geom_line() + 
+  geom_smooth(method = "lm", formula = y ~ x) + 
+  labs(y = "mean(X)", title = "Overall time trend")
+
+ggplot(X.data, aes(x = time, y = value, col = as.factor(land))) +
+  geom_point(alpha = .2, size = 1, position = position_jitter(width = .05)) + 
+  # stat_summary(fun.y = "mean", geom = "point") +
+  # stat_summary(fun.y = "mean", geom = "line") +
+  geom_smooth(method = "lm", formula = y ~ x, aes(group = land), alpha = .2) +
+  labs(y = "X", col = "land", title = "Land:time interaction")
+
+ggplot(tmp, aes(x = time, y = sd)) + 
+  geom_point() + 
+  geom_line() +
+  geom_smooth(method = "lm", formula = y ~ x) + 
+  labs(y = "sd(X)", title = "Trends in variation")
+
+# ggplot(X.data, aes(x = time, y = value)) +
+#   stat_summary(fun.y = "mean", geom = c("line")) +
+#   stat_summary(fun.y = "mean", geom = c("point")) + 
+#   geom_smooth(method = "lm") + 
+#   labs(x = time, y = "mean(X)")
+
+ggplot(data.frame(X = as.vector(X), W = as.vector(w), 
+                  land = as.vector(landcover)), 
+       aes(x = W, y = X, col = as.factor(land))) +
+  geom_point(alpha = .2, size = 1) +
+  geom_smooth(method = "lm", formula = y ~ x) +
+  labs(col = "land", title = "Effect of climate variable")
+```
+
+```{r map_errors, eval = FALSE}
+if(npix <= 1000){
+  ## Check that errors obtained from mvtnorm behave similarly
+  del2 <- mvtnorm::rmvnorm(n = n.time, sigma = Sigma, method = "chol")
+  vareps2 <- t(rbind(apply(X = del2, MARGIN = 2,
+                           function(e){
+                             arima.sim(n = n.time,
+                                       model = list(ar = AR, ma = MA, 
+                                                    innov = e))
+                           })))
+  
+  library(ggplot2)
+  # smooth gradient
+  ggplot(data.frame(coords, del), aes(x = x, y = y, fill = del)) +
+    geom_tile() +
+    scale_fill_viridis_c(option = "magma", name = "delta")
+  # less smooth, but obvious spatial correlation
+  ggplot(data.frame(coords, del), aes(x = x, y = y, fill = del2)) +
+    geom_tile() +
+    scale_fill_viridis_c(option = "magma", name = "delta2")
+  # slightly checkered
+  ggplot(data.frame(coords, vareps[,1]), aes(x = x, y = y, 
+                                             fill = vareps[,1])) +
+    geom_tile() +
+    scale_fill_viridis_c(option = "magma", name = "varepsilon")
+  # even more checkered
+  ggplot(data.frame(coords, vareps2[,1]), aes(x = x, y = y, 
+                                              fill = vareps2[,1])) +
+    geom_tile() +
+    scale_fill_viridis_c(option = "magma", name = "varepsilon2")
+  
+  ## Conclusion, the mvtnorm method produces LESS spatially correlated data
+  ## than t(Dr %*% rnorm())
+}
+```
+
+# Simulations
+
+The actual simulations were run with the script "self-contained-batch-sim_script/run-PARTS-sim.R"
+
+```{r}
+# B1*u1 + B2*u2 + R1*r1 + (p0 + p1*u1 + p2*u2 + R2*r2)*t + (g1 + R3*r3)*w1(t) + e(t)
+# X(t) = lambda*land + S1*r1 + (alpha + beta*land + S2*r2 )*t + (gamma + S3*r3)*temp(t) e(t)
+# 
+```
+
+1) Spatial Only
+
+  * T = 1
+  
+  * varying map sizes: e.g., 10K, 20K, 40K, 80K
+  
+  * fixed extent of **u**
+  
+  * test that beta1 = 0 and beta2 = beta1
+  
+  * plot estimates of beta1 with standard errors
+  
+  * **p** = **R2** = **g** = **R3** = 0
+  
+```{r}
+source("scripts/simulation-functions_morrowcj.R")
+sims = 10 # start small to test
+```
+
+With this first simulation we ask "Does a map size affect coefficient estimates?"
+  
+```{r sim_1}
+if(TRUE){
+  sim1_time <- system.time(expr = {
+    sim1 = sim_PARTs(map.width = c(104, 144, 200, 280), # varying map size
+                     ntime = 1, # spatial only
+                     land.grid = 2, # fixed land class extent.
+                     lambda = .2, S1 = 0, # constant effect of land class
+                     alpha = 0, beta = 0.2, S2 = 0, # effect of time in beta only
+                     gamma = 0, S3 = 0, # no effect of climate
+                     r = .05, # constant spatial range of ~ <5%
+                     nug = 0.1, # constant nugget
+                     AR = .2, MA = 0, # constant AR and MA parameters
+                     fixed_temp = TRUE, fixed_r2 = TRUE, fixed_r3 = TRUE, # fix to avoid recalculating
+                     par.sims = sims, # number of simulations per map
+                     npart = NA, partsize = 2000, # partitions are 2000px for each map size
+                     GLS.resp = "time", # estimate effects on time in GLS
+                     ncores = 10, verbose = TRUE, debug = FALSE
+    )
+  })
+  sim1_time
+  save(sim1, sim1_time, file = "data/sim1.RData")
+} else{
+  load("data/sim1.RData")
+}
+```
+
+I need to fix the r estimation.
+
+```{r, fig.asp = 1}
+library(ggplot2)
+L = sim1
+df = L$sim.table %>% cbind(lapply(L$GLS, function(x){x$overall_stats$coefmean}) %>% bind_rows())
+df.melt <- df %>%
+  # mutate(time.eff = `(Intercept)` + land1)
+  reshape2::melt(measure.vars = grep(pattern = "(\\(Intercept\\))|(^land1)",
+                                     x = names(df), value = TRUE),
+                 variable.name = "coefficient", value.name = "estimate")
+
+df.melt %>% 
+  ggplot(aes(x = factor(map.width), y = estimate, col = coefficient)) +
+  theme_classic() +
+  geom_hline(yintercept = c(0, unique(df.melt$beta)), lty = 2, col = "grey50") +
+  stat_summary(size = .25) + stat_summary(geom = "line", aes(group = coefficient)) +
+  labs(x = "Map Width", y = "Estimate")
+```
+  
+  
+2) Variable land patch sizes
+
+  * T = 30
+  
+  * map size = 10K
+  
+  * variable extent of **u**
+  
+  * test that p1 = 0 and p1 = p2
+  
+  * **g** = **R3** = 0
+  
+3) Effect of spatio-temporal predictor 
+
+  * T = 30
+  
+  * map size = 10K
+  
+  * fixed extent of **u**
+  
+  * test that g1 = 0
+  
+  * **p** = **R2** = 0
+  
+  * variable **R2** if spatial mean of **r2** is 0.
+  
+4) Effect on Type I errors (p1 = 0 and p1 = p2)
+
+  * variable **w**, all else constant
+  
+  * variable **r2**, all else constant
+  
+  * variable **r1**, all else constant
+  
+  * variable range parameter in **e(t)**, all else constant
+  
+  * spatially variable **rho** (2D sin wave), all else equal

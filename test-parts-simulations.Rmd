@@ -1,0 +1,183 @@
+---
+title: "test-simulations"
+author: "Clay Morrow"
+date: "6/18/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, error = FALSE)
+```
+
+```{r}
+source("scripts/simulation-functions_morrowcj.R")
+```
+
+```{r}
+start4 = Sys.time()
+sim_test <- sim_PARTs(lambda = 0, alpha = 0, beta = c(0,.2), gamma = 0,
+                      debug = FALSE, verbose = TRUE, land.grid = 2, ntime = 10,
+                      par.sims = 5, r = .1)
+end4 = Sys.time()
+time4 = end4 - start4
+```
+
+```{r, fig.asp = 2, fig.width = 4}
+L = sim_test
+df = L$sim.table %>% cbind(lapply(L$GLS, function(x){x$overall_stats$coefmean}) %>% bind_rows())
+df.melt <- df %>%
+  reshape2::melt(measure.vars = grep(pattern = "(\\(Intercept\\))|(^land1)",
+                                     x = names(df), value = TRUE),
+                 variable.name = "coefficient", value.name = "estimate")
+
+if (L$mod.info[[2]]["GLS.resp"] == "time") {
+  ttl = "Time effects"
+  df2 <- df.melt %>% reshape2::melt(measure.vars = c("alpha", "beta", "S2"),
+                                    variable.name = "parameter", value.name = "par.value")
+} else if (L$mod.info[[2]]["GLS.resp"] == "(Intercept)") {
+  ttl = "Intercept effects"
+  df2 <- df.melt %>% reshape2::melt(measure.vars = c("lambda", "S1"),
+                                    variable.name = "parameter", value.name = "par.value")
+} else if (L$mod.info[[2]]["GLS.resp"] == "z") {
+  ttl = "Climate effects"
+  df2 <- df.melt %>% reshape2::melt(measure.vars = c("gamma", "S3"),
+                                    variable.name = "parameter", value.name = "par.value")
+}
+
+library(ggplot2)
+df2 %>% ggplot(aes(x = par.value, y = estimate, col = coefficient)) +
+  theme_classic() +
+  geom_hline(yintercept = 0, lty = 2, col = "grey50") +
+  stat_summary() + stat_summary(geom = "line") +
+  facet_wrap(~ parameter, scales = "free", ncol = 1, strip.position = "bottom") +
+  theme(strip.placement = "outside", strip.background = element_blank()) +
+  labs(x = NULL, title = ttl)
+```
+
+```{r}
+start20 = Sys.time()
+sim_test20 <- sim_PARTs(lambda = 0, alpha = 0, beta = c(0,.2), gamma = 0,
+                      debug = FALSE, verbose = TRUE, land.grid = 2, ntime = 10,
+                      par.sims = 10, r = .1)
+end20 = Sys.time()
+time20 = end20 - start20
+```
+
+```{r, eval = FALSE}
+## Test it ----
+
+
+sim_PARTs(lambda = 0, alpha = 0, beta = c(0,.2), gamma = 0,
+          debug = FALSE, land.grid = 2, ntime = 10,
+          par.sims = 2, r = 1, GLS.resp = "(Intercept)")
+
+sim_PARTs(lambda = 0, alpha = 0, beta = c(0,.2), gamma = 0,
+          debug = FALSE, land.grid = 2, ntime = 10,
+          par.sims = 2, r = 1, GLS.resp = "z")
+
+# sim_test$GLS[[1]]$overall_stats$coefmean #intercept = alpha hat, land1 = lambda hat
+# sim_test$sim.table[1, c("alpha", "beta")]
+#
+# lapply(sim_test$GLS, function(x){x$overall_stats$coefmean}) %>% bind_rows()
+#
+# sim_test2 <- sim_PARTs(lambda = 0, alpha = 0, beta = c(0,.05,.2), gamma = 0,
+#                       debug = FALSE, land.grid = 2, ntime = 10,
+#                       par.sims = 2, r = 0.1, GLS.resp = "time.coef")
+
+
+
+
+# X(t) = lambda*land + S1*r1 + (alpha + beta*land + S2*r2 )*t + (gamma + S3*r3)*temp(t) e(t)
+
+## Goals
+# 1) Estimates of lambda w/se: test that lambda = 0
+# 2) Estimates of alpha and beta w/se: test that alpha and beta = 0
+# 3) Estimates of gamma w/se: test that alpha and beta = 0
+# 4) Compare type I (alpha and beta = 0) with changes.
+
+# sim_PARTs(ntime = 1, par.sims = 1)
+# try(sim_PARTs(ntime = 2, par.sims = 5))
+# sim_PARTs(ntime = 10, par.sims = 2)
+
+
+
+# library(dplyr);library(ggplot2)
+# ggplot2::theme_set(theme())
+
+# data.frame(sim_test$coords, z = sim_test$basetemp) %>%
+#   ggplot(aes(x = x, y = y, fill = z)) +
+#   geom_tile() +
+#   scale_fill_gradient2()
+#
+# data.frame(sim_test$coords, sim_test$Temp) %>% reshape2::melt(id.vars = c("x", "y")) %>%
+#   ggplot(aes(x = x, y = y, fill = value)) +
+#   geom_tile() +
+#   facet_grid(variable ~ .) +
+#   scale_fill_gradient2()
+#
+# # Plot the X data by time and simulation
+# sim_test$data %>%
+#   reshape2::melt(id.vars = c("sim.ID", "pixel", "xcoord", "ycoord")) %>%
+#   ggplot(aes(x = xcoord, y = ycoord, fill = value)) +
+#   facet_grid(variable ~ sim.ID) +
+#   geom_tile() +
+#   scale_fill_gradient2(high = "darkgreen", mid = "grey95")
+#
+# all((sim_test$data %>% filter(sim.ID == 1) %>% select(X.5)) == (sim_test$data %>% filter(sim.ID == 2) %>% select(X.5)))
+
+# data.frame(sim_test$coords, z = sim_test$int.eff[, 1]) %>%
+#   ggplot(aes(x = x, y = y, fill = z)) + geom_tile()
+#
+# data.frame(sim_test$coords, z = sim_test$time.eff) %>%
+#   reshape2::melt(id.vars = c("x", "y")) %>%
+#   ggplot(aes(x = x, y = y, fill = value)) + geom_tile() +
+#   facet_wrap(~variable)
+#
+# data.frame(sim_test$coords, z = sim_test$eps) %>%
+#   reshape2::melt(id.vars = c("x", "y")) %>%
+#   ggplot(aes(x = x, y = y, fill = value)) + geom_tile() +
+#   facet_wrap(~variable)
+#
+# data.frame(sim_test$coords, sim_test$del) %>%
+#   reshape2::melt(id.vars = c("x", "y")) %>%
+#   ggplot(aes(x = x, y = y, fill = value)) + geom_tile() +
+#   facet_grid(variable~.)
+
+# sim_test$int.eff %>%
+#   reshape2::melt(id.vars = c("sim.ID", "pixel", "xcoord", "ycoord")) %>%
+#   ggplot(aes(x = xcoord, y = ycoord, fill = value)) +
+#   facet_wrap(~variable) +
+#   geom_tile()
+
+# Plot the sin wave to be used
+# data.frame(sim_test$coords, z = sin_2d(sim_test$coords[, 1], sim_test$coords[, 2])) %>%
+#   ggplot(aes(x = x, y = y, fill = z)) +
+#   geom_tile()
+#
+#
+# lowR = sim_test <- sim_PARTs(map.width = 32, lambda = 0, alpha = 0, beta = 0, debug = TRUE,
+#                              land.grid = 1, ntime = 5, nsims = 2, r = 0.01)
+#
+# highR = sim_test <- sim_PARTs(map.width = 32, lambda = 0, alpha = 0, beta = 0, debug = TRUE,
+#                                      land.grid = 1, ntime = 5, nsims = 2, r = 10)
+
+# data.frame(sim = "lowr", lowR$coords, lowR$eps) %>%
+#   rbind(data.frame(sim = "highr", highR$coords, highR$eps)) %>%
+#   as.data.frame() %>%
+#   reshape2::melt(id.vars = c("x", "y", "sim")) %>%
+#   ggplot(aes(x = x, y = y, fill = value)) +
+#   geom_tile() +
+#   facet_grid(variable ~ sim) +
+#   scale_fill_gradient2(high = "darkgreen", mid = "grey95")
+
+# data.frame(lowR$coords, low = lowR$eps[,1], high = highR$eps[,1]) %>%
+#   reshape2::melt(measure.vars = c("high", "low")) %>%
+#   ggplot(aes(x = x, y = y, fill = value)) +
+#   geom_tile() +
+#   facet_wrap(~variable) +
+#   scale_fill_gradient2(high = "darkgreen", mid = "grey95")
+
+# all(highR$Sigma - lowR$Sigma == 0)
+
+```
+

@@ -1,0 +1,445 @@
+---
+title: "PARTS paramter estimation"
+author: "Clay Morrow"
+date: "5/18/2021"
+output: 
+  html_document:
+    code_folding: "hide"
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+```{r libraries}
+library(ggplot2); library(dplyr)
+theme_set(theme_classic() + theme(strip.background = element_blank()))
+```
+
+
+## Intro
+
+This document will describe how PARTS estimates parameters of simulated data.
+
+The "Code" boxes on the right hand side of the page can be clicked on the HTML 
+version of this document to display code chunks used to create output.
+
+## Data simulation
+
+For simplicity, data in this document were modeled to include only effects
+of time and space:
+
+$$X(t) = \lambda \times \text{latitude} + (\alpha + \beta \times \text{latitude})t + \varepsilon(t)$$
+
+$\lambda = 0.1$ is the base effect of latitude (y coordinates) on $X$,
+$\alpha = 0.2$ is an intercept effect of time on $X$, and $\beta = 0.4$ is the 
+interaction effect between latitude and time on $X$. Data are
+simulated for 20 time steps (i.e. $t = 1, 2, ..., 20$).
+
+$\varepsilon$ is generated with an AR(1) process with spatially auto-correlated
+innovations. The AR parameter is fixed at 0.50. 
+
+All parameter values were selected to accentuate differences in $X$ across space and time.
+
+```{r init_params}
+# FULL MODEL: X(t) = lambda*lat + (a + (beta * lat) )*t + e(t)
+
+# 1) Starting (true) values ----
+## map size
+map.cols = map.rows = 20
+
+## total number of pixels
+npix = map.cols * map.rows
+
+## total number of time points
+ntime = 20
+
+## time coefficient (intercept)
+alpha = .05
+
+## effect of latitude the time trend
+beta = .05
+
+lambda = .01
+
+## pixel coordinates
+coords = scales::rescale(as.matrix(expand.grid(x = as.double(1:map.cols),
+                               y = as.double(1:map.rows))), to = c(0, 1))
+
+## Distance between pixels (scaled between 0 and 1)
+D <- scales::rescale(as.matrix(dist(coords)), to = c(0, 1))
+
+## spatial correlation range parameter
+r = .01 # 25% the width of the map
+
+## nugget
+nug = 0.05
+# varying the nugget only seems to have absolutely no effect on estimates.
+
+## diagonal nugget matrix
+nugmat = diag(rep(nug, npix))
+# nugmat[1:5, 1:5] # visualize first 5 rows and cols
+```
+
+The spatial errors ($\delta$) are simulated with the exponential covariance 
+function $exp(-d/r)$. $d = [0, 1]$ is the distance between points and $r = .25$ 
+is the range of spatial auto-correlation. 
+
+This is what the covariance function looks like between 0 and 1: 
+
+```{r covar_func, fig.width = 6, fig.asp = 2/3}
+# 2) Spatial Covariance ----
+
+## exponential covariance function
+covar_func <- function(d, range = r){
+  covar = exp(-d/range) # exponential covariance function
+  return(covar)
+}
+
+## Visualize the exponential covariance function
+curve(covar_func(x), from = 0, to = 1,
+      xlab = "d (distance between i and j)",
+      ylab = paste0("exp(-d/",r, ")"),
+      main = "Correlation between i and j")
+```
+
+To create the spatial covariance matrix, the results of this function are  
+scaled by a nugget component ($1 - \eta$) and the nugget $\eta = 0.1$ is also 
+added to the diagonal. Below is a semivariogram of the full covariance function:
+
+```{r semivar, fig.width = 6, fig.asp = 2/3}
+## add in the nugget to make the covariance matrix
+  # Note that the "partial sil" is sil - nug in spatial statistics
+  # and a semivariogram is just 1 - covariance
+curve(1 - ((1-nug)*covar_func(x)), from = 0, to = 1,
+      ylab = "covariance", xlab = "distance", main = "Semivariogram",
+      ylim = c(0,1))
+# add nugget line and legend
+abline(h = nug, col = "forestgreen", lty = 2)
+legend(x = .75, y = .5, lty = 2, col = "forestgreen", legend = "nugget")
+```
+
+The resultant covariance matrix is multiplied by a random variable to 
+obtain the spatial errors ($\delta$). Below are those simulated spatial errors 
+visualized on a heatmap:
+
+```{r sigma_heatmap, fig.width = 5, fig.asp = .8}
+set.seed(2) # set random seed
+
+## Calculate covariance matrix (the nugget is added to the diagonal to get cov(i,i) = nugget)
+# Sigma = t(backsolve(chol(nugmat + (1 - nug) * covar_func(D, r)), diag(npix)))
+Sigma = nugmat + (1 - nug) * covar_func(D, r)
+
+## Simulate a random spatial error structure
+del = scale(Sigma %*% rnorm(npix))
+
+## view the spatial errors
+ggplot(data.frame(coords, del), aes(x = x, y = y, fill = del)) +
+  geom_tile() + labs(title = "Spatial errors") +
+  scale_fill_viridis_c(option = "magma")
+```
+
+$\delta$s were then used as the innovation terms for a series of AR simulations
+to create $\varepsilon(t)$. 
+
+```{r, ar_sim}
+set.seed(915)
+
+# 3) Generate spatio-temporal errors (ARMA(1)) using our spatial errors
+epsilon = t(rbind(apply(X = t(del), MARGIN = 2,
+              function(e){
+                arima.sim(n = ntime,
+                          model = list(ar = .5, ma = 0, innov = e))
+              })))
+```
+
+And finally, the fixed effects of time and latitude were added to $\varepsilon$
+to create X. Below are the data, separated by time step. The increasing value of
+$X$ over time and the greater rate of increase at higher latitudes is apparent
+from this figure. Another thing to note is that the spatial patterns present
+in $\delta$ are **not** apparent in $X$, though spatial patterns do exist.
+
+```{r x_by_time}
+## Add an effect of time plus the spatio-temporal errors
+
+lat.effect = matrix(rep(rep(lambda, npix)*coords[,2], times = ntime), ncol = ntime)
+time.int.effect = rep(alpha, npix)
+time.lat.effect = rep(beta, npix)*coords[,2]
+time.effect = (time.int.effect + time.lat.effect) %*% rbind(1:ntime)
+
+X = lat.effect + time.effect + epsilon
+
+## Add the coordinates back into the data
+Xdata = data.frame(coords, X)
+
+## Visualize the simulated data for each time point
+Xdata %>% reshape2::melt(id.vars = c("x", "y")) %>%
+  # filter(variable == "X1") %>% 
+  ggplot(aes(x = x, y = y, fill = value)) +
+  geom_tile() +
+  facet_wrap(~variable) +
+  scale_fill_viridis_c(option = "magma")
+```
+
+Just to verify, below are figures displaying 1) the average of $X$ at each time 
+step, demonstrating a steady increase; and 2) The average effect of latitude on $X$, 
+again showing a steady increase
+
+```{r time_lat_effect, fig.width = 4}
+## Visualize the overall time trend
+Xdata %>% reshape2::melt(id.vars = c("x", "y")) %>%
+  ggplot(aes(x = as.numeric(variable), y = value)) +
+  stat_summary(fun.data = "mean_cl_normal") +
+  geom_smooth(method = "lm", aes(group = 1), se = FALSE, formula = y ~ x) +
+  labs(x = "Time", y = "X (map average)", title = "Time Trend")
+
+## Visualize the overall effect of latitude
+Xdata %>% reshape2::melt(id.vars = c("x", "y")) %>%
+  ggplot(aes(x = y, y = value)) +
+  stat_summary(fun.data = "mean_cl_normal") +
+  geom_smooth(method = "lm", aes(group = 1), se = FALSE, formula = y ~ x) +
+  labs(x = "Latitude", y = "X (map average)", title = "Latitude effect")
+```
+
+## CLS
+
+Next we fit a CLS (or AR) to the simulated data and plot 1) the spatial 
+distribution of our estimate the time trend; and 2) the effect of latitude on
+that time trend.
+
+```{r}
+# 4) fit PARTS ----
+library(remotePARTS)
+
+## fit CLS
+CLS <- fitCLS.map(X, 1:ntime)
+
+## get estimates of alpha and add it back into data
+Xdata$alpha.hat = alpha.hat = CLS$time.coef$Est
+
+ggplot(Xdata, aes(x = x, y = y, fill = alpha.hat)) + 
+  geom_tile() + 
+  scale_fill_viridis_c(option = "magma") + 
+  labs(fill = "Time trend estimate", title = "Spatial structure of time trend")
+
+ggplot(Xdata, aes(x = y, y = alpha.hat)) + 
+  geom_point(alpha = .2) + 
+  geom_smooth(method = "lm") +
+  labs(y = "Time trend estimate", x = "y coordinate", title = "Latitude:time effect")
+```
+
+## Estimate range parameter
+
+Then, from the residuals of these fitted models, we estimate the spatial range
+parameter $r$. Notice that the estimate for $r$ from the correlation among 
+residuals is significantly lower than our true value of 0.2. 
+
+*Note*: Instead of using `remotePARTS::fit_spatialcor()`, the individual
+steps are shown in the code block below.
+
+```{r, r_from_cov}
+resids = t(CLS$residuals) # matrix of residuals
+cor.resids = cor(resids) # corelation matrix of residuals
+v.cor.resids = cor.resids[upper.tri(cor.resids, diag = TRUE)] # vector of correlations
+v.dist = D[upper.tri(D, diag = TRUE)] # vector of distances
+ 
+W = data.frame(dist = v.dist, cor = v.cor.resids) # paired dist-cor values
+
+r.est = coef(fit <- nls(cor ~ exp(-dist/r), data = W, start = list(r = 1)))
+r.est
+```
+
+To verify that the estimation method works, we then estimate $r$ from the
+true covariance matrix. This time, the estimate of $r$ is very close to the 
+true paramter value. **I don't know what is causing this.**
+
+```{r r_from_sig}
+v.cov.resids = Sigma[upper.tri(Sigma, diag = TRUE)] # vector of true covariance
+v.dist = D[upper.tri(D, diag = TRUE)] # vector of distance
+
+W = data.frame(dist = v.dist, cor = v.cov.resids) # paired dist-cov values
+
+coef(fit <- nls(cor ~ exp(-dist/r), data = W, start = list(r = 1), algorithm = "port"))
+```
+
+## Estimate nugget
+
+Furthermore, the nugget is not being estimated correctly. Here is the estimate 
+$\eta$ derived from a covariance matrix estimated from the too-small $r$ estimate:
+
+```{r}
+## estimate covariance with r
+Sigma.est = covar_func(D, range = r.est)
+
+## estimate nugget with the estimated covariance and alphas
+nug.est = optimize_nugget(X = X, V = Sigma.est, y = alpha.hat)
+nug.est
+```
+
+and here it is when using the true covariance matrix.
+
+```{r}
+nug.est2 = optimize_nugget(X, Sigma, alpha.hat)
+nug.est2
+```
+
+**What is going on?**
+
+*Note* I double-checked that these functions are working appropriately by running
+the Alaska vignette again and everything worked fine in that context.
+
+## GLS
+
+Based on a too-low range paramter, and a too-high nugget parameter, our 
+estimates of $\alpha$ and $\beta$ are not as good as they could be:
+
+*Note* error bars are standard errors times 1.96 (i.e. pseudo confidence intervals)
+
+```{r, GLS_params, fig.width=5, fig.asp = .8}
+## Fit the GLS
+GLS = fitGLS(X = model.matrix(alpha.hat ~ 1 + coords[, 2]), V = Sigma.est, 
+             y = Xdata$alpha.hat, nugget = nug.est, X0 = rep(1, nrow(X)))
+# GLS = fitGLS(X = model.matrix(alpha.hat ~ 1), V = Sigma.est, y = Xdata$alpha.hat, nugget = nug.est, X0 = rep(0, nrow(X)))
+
+est.tab = data.frame(par = c("r", "nugget", "alpha", "beta"),
+                     real = c(r, nug, alpha, beta),
+                     est = c(r.est, GLS$nugget, GLS$betahat[1], GLS$betahat[2]),
+                     SE = c(NA, NA, GLS$SE[1], GLS$SE[2])
+                     )
+
+ggplot(est.tab, aes(x = par, y = real)) +
+  geom_point(aes(col = "real")) +
+  geom_text(aes(,y = real, label = round(real, 2)), nudge_x = .25, nudge_y = 0, size = 3.5) +
+  geom_point(aes(y = est, col = "est")) + 
+  geom_text(aes(,y = est, label = round(est, 2)), nudge_x = .25, nudge_y = 0, size = 3.5) +
+  geom_errorbar(aes(y = est, ymin = est - 1.96*SE, ymax = est + 1.96*SE, col = "est"), width = 0) + 
+  labs(x = "parameter", y = "value", color = NULL, title = "Paramter Estimation", subtitle = "estimated range and nugget")
+```
+
+**AND** the estimates (a and b) don't change when using the true covariance matrix
+in the GLS
+
+```{r fig.width = 5, fig.asp = .8}
+GLS2 = fitGLS(X = model.matrix(alpha.hat ~ 1 + coords[, 2]), V = Sigma, 
+              y = Xdata$alpha.hat, nugget = nug.est2, X0 = rep(1, nrow(X)))
+# GLS = fitGLS(X = model.matrix(alpha.hat ~ 1), V = Sigma.est, y = Xdata$alpha.hat, nugget = nug.est, X0 = rep(0, nrow(X)))
+
+est.tab2 = data.frame(par = c("r", "nugget", "alpha", "beta"),
+                     real = c(r, nug, alpha, beta),
+                     est = c(r, GLS2$nugget, GLS2$betahat[1], GLS2$betahat[2]),
+                     SE = c(NA, NA, GLS2$SE[1], GLS2$SE[2])
+                     )
+
+ggplot(est.tab2, aes(x = par, y = real)) +
+  geom_point(aes(col = "real")) +
+  geom_text(aes(,y = real, label = round(real, 2)), nudge_x = .25, nudge_y = 0, size = 3.5) +
+  geom_point(aes(y = est, col = "est")) +
+  geom_text(aes(,y = est, label = round(est, 2)), nudge_x = .25, nudge_y = 0, size = 3.5) +
+  geom_errorbar(aes(y = est, ymin = est - 1.96*SE, ymax = est + 1.96*SE, col = "est"), width = 0) + 
+  labs(x = "parameter", y = "value", color = NULL, title = "Paramter Estimation", subtitle = "true range")
+```
+
+Finally, when the true covariance matrix and the true nugget are both used,
+the estimates change but the standard errors become much larger:
+
+```{r, fig.width=5, fig.asp = .8}
+GLS3 = fitGLS(X = model.matrix(alpha.hat ~ 1 + coords[, 2]), V = Sigma, 
+              y = Xdata$alpha.hat, nugget = nug, X0 = rep(1, nrow(X)))
+# GLS = fitGLS(X = model.matrix(alpha.hat ~ 1), V = Sigma.est, y = Xdata$alpha.hat, nugget = nug.est, X0 = rep(0, nrow(X)))
+
+est.tab3 = data.frame(par = c("r", "nugget", "alpha", "beta"),
+                     real = c(r, nug, alpha, beta),
+                     est = c(r, GLS3$nugget, GLS3$betahat[1], GLS3$betahat[2]),
+                     SE = c(NA, NA, GLS3$SE[1], GLS3$SE[2])
+                     )
+
+ggplot(est.tab3, aes(x = par, y = real)) +
+  geom_point(aes(col = "real")) +
+  geom_text(aes(,y = real, label = round(real, 2)), nudge_x = .25, nudge_y = 0, size = 3.5) +
+  geom_point(aes(y = est, col = "est")) +
+  geom_text(aes(,y = est, label = round(est, 2)), nudge_x = .25, nudge_y = 0, size = 3.5) +
+  geom_errorbar(aes(y = est, ymin = est - 1.96*SE, ymax = est + 1.96*SE, col = "est"), width = 0) + 
+  labs(x = "parameter", y = "value", color = NULL, title = "Paramter Estimation", subtitle = "true range and nugget")
+```
+
+
+<!-- We can see that, even though our estimates of the nugget and range parameter  -->
+<!-- aren't very good, our estimates of the coefficients of interest are. The -->
+<!-- true parameter values lie within our 95% confidence intervals. -->
+
+```{r, eval = FALSE}
+## Now fit it again, this time estimating r and nug simultaneously from the data
+# This version estimates r and the nugget from the correlations among the alpha estimates instead of residuals
+GLS_optim <- optimize_GLS(alpha.hat ~ 1 + y, D = D, data = Xdata, lower = 0, upper = 1)
+# GLS_optim <- optimize_GLS(alpha.hat ~ 1, D = D, data = Xdata)
+# GLS_optim
+
+est.tab_optim = data.frame(par = c("r", "nugget", "alpha", "beta"),
+                     real = c(r, nug, alpha, beta),
+                     est = c(NA, GLS_optim$nugget, GLS_optim$betahat[1], GLS_optim$betahat[2]),
+                     SE = c(NA, NA, GLS_optim$SE[1], GLS_optim$SE[2])
+                     )
+
+# ## add in these estimates to the table
+# est.tab$gls.optim = c(NA, GLS_optim$nugget, unname(GLS_optim$betahat)[1], unname(GLS_optim$betahat[2]))
+
+## Even though our estimates of the nugget and range parameter are not very close to the true values,
+## the paramter that we're actually interested in (alpha) is! and that's what is important.
+
+ggplot(est.tab_optim, aes(x = par, y = real)) +
+  geom_point(aes(col = "real")) +
+  geom_point(aes(y = est, col = "est")) +
+  geom_text(aes(label = round(real, 2)), size = 2.5, nudge_x = .15, nudge_y = .05) + 
+  geom_text(aes(label = round(est, 2), y = est), size = 2.5, nudge_x = .15) + 
+  labs(x = "parameter", y = "value", color = NULL, title = "Paramter Estimation")
+```
+## Simpler simulation of X
+
+```{r}
+## Simulate this through time
+X <- matrix(NA, ncol = ntime, nrow = npix)
+X[,1] <- del + rnorm(npix, sd = 0.05)
+for(i in 2:ntime){
+  # X[, i] = X[, i - 1] + rnorm(npix, mean = .1, sd = .25)
+  X[, i] = X[, 1] + .2 * (i-1) + rnorm(npix, sd = 0.005)
+}
+
+## view X in space and time
+data.frame(coords, X) %>%
+  reshape2::melt(id.vars = c("x", "y")) %>%
+  ggplot(aes(x = x, y = y, fill = value)) +
+  facet_wrap(~variable) +
+  geom_tile() + labs(title = "Spatial errors") +
+  scale_fill_viridis_c(option = "magma")
+
+## empty matrix of residuals
+resids = matrix(NA, ncol = ntime - 1, nrow = npix)
+coefs = data.frame(coef = rep(NA, npix), pval = rep(NA, npix))
+
+# fit regression to extract residuals
+for(i in 1:npix){
+  xi = X[i, 1:(ntime - 1)]
+  xj = X[i, 2:ntime]
+  dat = data.frame(xi, xj, t = 2:ntime)
+  fm = lm(xi ~ xj + t, data = dat)
+  resids[i, ] = residuals(fm) # fill matrix
+  coefs[i, "coef"] <- coef(fm)["t"]
+  coefs[i, "pval"] <- summary(fm)$coef["t", 4]
+}
+
+cor.resids = cor(t(resids)) # spatial correlation of model residuals
+v.cor.resids = cor.resids[upper.tri(cor.resids, diag = TRUE)] # as a vector
+v.dist = D[upper.tri(D, diag = TRUE)] + .001 # vector of distance
+W = data.frame(dist = v.dist, cor = v.cor.resids)
+
+# ## Estimate r from the covariance matrix: ----
+#   # First, we need to combine the covars and distances into a data frame
+# v.cov.resids = Sigma[upper.tri(Sigma, diag = TRUE)] # vector of true covariance
+# W = data.frame(dist = v.dist, cor = v.cov.resids) # paired dist-cov values
+
+## estimate r with ML
+r.est = coef(fit <- nls(cor ~ exp(-dist/r), data = W, start = list(r = .1), trace = FALSE))
+r.est # very close to true value
+```
+

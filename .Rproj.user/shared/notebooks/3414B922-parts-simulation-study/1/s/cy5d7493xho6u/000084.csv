@@ -1,0 +1,4 @@
+"0","# show taper spherical function with varying thetas"
+"0","curve(taper.sphr(x, .02), from = 0, to = 0.1, n = 101, col = ""black"","
+"0","      main = ""Tapering spherical covariance function"","
+"0","      ylab = ""f(distance, range)"", xlab = ""distance (% of map)"")"

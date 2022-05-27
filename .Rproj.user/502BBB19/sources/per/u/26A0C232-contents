@@ -1,0 +1,19 @@
+Z <- c(rep(-1, 150), 
+       rep(0, 35),
+       rep(1, 15))
+
+Y = .4*Z + rnorm(200)
+
+df <- data.frame(Z, Y, geno = factor(Z, levels = c(-1, 0, 1), labels = c("AA", "Aa", "aa")))
+
+library(ggplot2)
+ggplot(df, aes(x = Z+1, y = Y, col = geno)) + 
+  geom_boxplot(aes(group = geno), fill = NA, outlier.shape = NA, col = "grey50") +
+  geom_point(size = 1.2) +
+  geom_smooth(method = "lm", se = FALSE, col = "black", fill = "grey80") +
+  theme_classic() + 
+  scale_x_continuous(breaks = c(0, 1, 2)) +
+  # lims(y = c(-2.5, 2.5)) +
+  labs(x = "Minor alleles", col = "genotype (Z)") +
+  theme(legend.position = c(.95,.05), legend.justification = c(1, 0),
+        legend.background = element_rect(colour = "grey80"))

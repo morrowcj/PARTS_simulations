@@ -1,0 +1,8 @@
+"0","## Calculate time"
+"0","times.2 <- data.frame(rbind(""2-1"" = sim2.1_time[1:3], ""2-2"" = sim2.2_time[1:3], ""3-3"" = sim2.3_time[1:3]))"
+"0","times.2[""total"", ] = colSums(times.2)"
+"0",""
+"0","times.2$hours = round(times.2$elapsed/3600, 2)"
+"0","times.2$days = round(times.2$hours/24, 2)"
+"0",""
+"0","times.2[, c(""hours"", ""days"")]"

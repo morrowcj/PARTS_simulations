@@ -1,0 +1,50 @@
+"0","# Load in data files ----"
+"0","# Resistance project data (full.data is the actual object with experimental trees)"
+"0","# load(""initial-objects_resistance.RData"", verbose = TRUE)"
+"0",""
+"0","## original location"
+"0","load(""C:/Users/morrowcj/Box/projects/holstrom_plant-vigor-study/Analysis_R/data/initial-objects_resistance.RData"","
+"0","     verbose = TRUE)"
+"1","Loading objects:
+"
+"1","  "
+"1","larval.data
+"
+"1","  "
+"1","tree.data
+"
+"1","  "
+"1","full.data
+"
+"2","Loading required package: lubridate
+"
+"2","
+Attaching package: ‘lubridate’
+
+"
+"2","The following objects are masked from ‘package:base’:
+
+    date, intersect, setdiff, union
+
+"
+"0","# Manupulate data ----"
+"0","## Identify trees of interest"
+"0","holst.trees <- unique(full.data$SerialNo)"
+"0",""
+"0","## Reduce full.data to only keep needed info"
+"0","holst.subset <- full.data %>% "
+"0","  select(SerialNo, Block, Row, Position, Genet, group) %>% # only keep identity columns"
+"0","  filter(SerialNo %in% holst.trees, !Row %in% c(""NB"",""SB"",""WB"",""EB"")) %>%  # exclude non-experimental trees"
+"0","  mutate(Row = factor(Row, levels = LETTERS[14:1]), # reorder the ""Row"" variable"
+"0","         Position = as.numeric(as.character(Position))) %>%  # ensure that ""Position"" is numeric"
+"0","  distinct() # remove any duplicate rows"
+"0",""
+"0",""
+"0","rm(larval.data, tree.data, full.data) # clear unused objects from memory"
+"0",""
+"0",""
+"0",""
+"0","# calculate the row and column of experimental trees from location information"
+"0","## note that ""Row.abs"" and ""Col"" are named the same as in the ""wisasp"" object!"
+"0","holst.subset$Row.abs = as.numeric(holst.subset$Position) + (28*(holst.subset$Block - 1))"
+"0","holst.subset$Col = as.numeric(holst.subset$Row)"

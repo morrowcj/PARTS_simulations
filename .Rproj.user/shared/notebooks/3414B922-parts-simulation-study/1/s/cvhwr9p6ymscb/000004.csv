@@ -1,0 +1,6 @@
+"0","X.data = data.frame(coords, X, land = as.vector(landcover)) %>% "
+"0","  reshape2::melt(id.vars = c(""x"", ""y"", ""land"")) %>% "
+"0","  mutate(time = scales::rescale(as.numeric(variable), to = c(0, 1)))"
+"2","Error in data.frame(coords, X, land = as.vector(landcover)) %>% reshape2::melt(id.vars = c(""x"",  : 
+  could not find function ""%>%""
+"

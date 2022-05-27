@@ -1,0 +1,25 @@
+{
+    "id": "98DAB685",
+    "path": "D:/morrowcj/Documents/Projects/remote-sensing-project/PARTS_simulations/scripts/self-contained-batch-sim_script/run-PARTS-sim_PART2.R",
+    "project_path": "scripts/self-contained-batch-sim_script/run-PARTS-sim_PART2.R",
+    "type": "r_source",
+    "hash": "1632932018",
+    "contents": "",
+    "dirty": false,
+    "created": 1639079277201.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "cursorPosition": "50,21",
+        "scrollLine": "0",
+        "Source": "Source"
+    },
+    "folds": "86|55|156|2|\n157|36|249|2|\n250|13|379|2|\n380|11|450|2|\n",
+    "lastKnownWriteTime": 1631645674,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1650303999705,
+    "read_only": false,
+    "read_only_alternatives": []
+}

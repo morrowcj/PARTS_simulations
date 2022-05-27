@@ -1,0 +1,717 @@
+---
+title: "PARTS Simulations"
+author: "Clay Morrow"
+date: "3/10/2021"
+output:
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE, cache.extra = rand_seed)
+```
+
+```{r, message=FALSE, warning=FALSE, error=FALSE}
+library(mvtnorm)
+library(dplyr)
+library(ggplot2)
+```
+
+
+<!-- ## Original Models -->
+
+<!-- Simulation model:  -->
+<!-- $x_i(t) = (\Sigma_{k} \nu_{k, i} u_{k, i}) + \omega_i w_{i}(t) + (\Sigma_{k} \zeta_{k,i} u_{k,i}) t + \varepsilon_{i}(t)$ -->
+
+<!-- with `ARMA(2, 1)` error structure:  -->
+<!-- $\varepsilon_{i}(t) = \beta_{1,i} \varepsilon_{i}(t - 1) + \beta_{2,i}\varepsilon_{i}(t - 2) + \delta_i(t) + \alpha_{i} \delta_{i}(t - 1)$ -->
+
+<!-- where:  -->
+
+<!-- * $x_t(t)$: spatio-temporal response (e.g. NDVI) at location $i$ at time $t$ -->
+
+<!-- * $w_i(t)$: spatio-temporal predictor (e.g temperature) -->
+
+<!-- * $u_{k,i}$: $k$ model matrix of temporally-fixed spatial variable (e.g.  -->
+<!-- land-cover); $k = 0, ..., K$. When $k = 0$, $u$ is a vector of ones  -->
+<!-- (intercept only) -->
+
+<!-- * $(\Sigma_{k} \zeta_{k, i} u_{k, i})$: time trend term    -->
+
+<!-- * $(\Sigma_{k} \nu_{k, i} u_{k, i})$: Intercept term -->
+
+<!-- * $\delta_i(t)$: random variation driver: multivariatiate normal -->
+
+<!--   - $cor{\delta_i(t), \delta_j(t)} = f_\delta(d_{i,j}; \psi_i, r_{i,j}, a_{i,j})$ -->
+
+<!--     + $f_\delta()$ is some function that depends on distance between points  -->
+<!--     $i$ and $j$.  -->
+
+<!-- ```{r stackex_arima_sim, eval = FALSE, echo = FALSE} -->
+<!-- # I should consider generating $\varepsilon_{i}(t)$ with the `arima.sim()`  -->
+<!-- # function. This would allow easy generalization to any ARMA(p, q) process.  -->
+<!-- # I'd need to figure out how to make time series correlated. The `arima.sim()`  -->
+<!-- # allows use of a function to generate the error term. An answer [here](https://stats.stackexchange.com/questions/136462/how-do-you-generate-correlated-arma1-1-models)  -->
+<!-- # shows how to do that: -->
+
+
+<!-- ## Code from StackExchange -->
+<!-- ## Here, X and Y are correlated ARMA(1, 1) -->
+<!-- ## x(t) = phi*x(t-1) + e(t) + theta*e(t-1) -->
+<!-- ## y(t) = alpha*y(t-1) + eta(t) + beta*eta(t-1) -->
+<!-- ## cov(e(i), eta(i)) = sigma; cov(e(i), eta(j)) = 0 -->
+
+
+<!-- # require("mvtnorm") -->
+<!-- # parameters of the data generating process -->
+<!-- desired.rho <- 0.2 -->
+<!-- Sigma <- diag(c(2,3))     -->
+<!-- phi <- 0.7 -->
+<!-- theta <- 0.3 -->
+<!-- alpha <- -0.4 -->
+<!-- beta <- 0.2 -->
+<!-- # implied value of the covariance between the disturbance terms -->
+<!-- sdx <- sqrt(Sigma[1,1] * (1 + theta^2 + 2*phi*theta) / (1 - phi^2)) -->
+<!-- sdy <- sqrt(Sigma[2,2] * (1 + beta^2 + 2*alpha*beta) / (1 - alpha^2)) -->
+<!-- scov <- desired.rho * sdx * sdy * (1 - phi*alpha) / (phi*beta + 1 + alpha*theta + beta*theta) -->
+<!-- scov -->
+<!-- # [1] 1.022579 -->
+<!-- Sigma[1,2] <- Sigma[2,1] <- scov -->
+<!-- n <- 200 -->
+<!-- niter <- 10000 -->
+<!-- rhos <- rep(NA, niter) -->
+<!-- set.seed(123) -->
+<!-- for (i in seq_len(niter)) { -->
+<!--   eps <- mvtnorm::rmvnorm(n = n, mean = rep(0, 2), sigma = Sigma) -->
+<!--   x1 <- arima.sim(n = n, model = list(ar = phi, ma = theta), innov = eps[,1]) -->
+<!--   x2 <- arima.sim(n = n, model = list(ar = alpha, ma = beta), innov = eps[,2])   -->
+<!--   rhos[i] <- cor(x1, x2) -->
+<!-- } -->
+<!-- summary(rhos) -->
+
+<!-- ## Notes:  -->
+
+
+<!-- # As a varcovar matrix, the diagonal of Sigma is the variance for each variable. -->
+<!-- ``` -->
+
+
+<!-- ### Notes for Tony -->
+
+<!-- * Why is $u$ a vector of ones when $k = 0$? -->
+<!-- * What is $\Sigma_k$ in the intercept and time-trend parameters? -->
+
+
+
+# Reworked models 
+
+The overall response will be simulated with the following process:
+
+$$
+x_{i}(t) = \beta_{k, i}u_{k, i} + (\phi_{m, i}u_{m,i})t + 
+\gamma_{k, i} w_{k, i}(t) + \varepsilon_{i}(t) \tag{1}
+$$
+
+Where: 
+
+* $x_{i}(t)$ is the variable of interest (e.g. NDVI) in pixel $i$;
+
+* $u_{k,i}$ is a model matrix of $k = 1, ..., K$ spatially variable predictors 
+(e.g. landclass);
+
+* $w_{m, i}(t)$ are $m = 1, ..., M$ spatio-temporally variable predictors 
+(e.g. temperature);
+
+* $\beta_{k, i}$, $\phi_{m, i}$, and $\gamma_{m, i}$ are the effects of the 
+predictors. Each of these can be fixed OR randomly distributed in space 
+$\{\beta_{k}, \phi_{m},  \gamma_{m} \} \sim N(\mu, \Sigma_\text{Matern})$ 
+(see below); and
+
+* $\varepsilon_{i}(t)$ is the spatio-temporally correlated error term.
+
+$\varepsilon_{i}(t)$ (and $w_{m,i}$) is generated with an ARMA process:
+
+$$\varepsilon_{i}(t) = \delta_{i}(t) + 
+\sum_{j = 1}^{p}{\rho_{j}\varepsilon_{i}(t)} + 
+\sum_{j = 1}^{q}{\theta_{j}\varepsilon_{i}(t)} \tag{2}$$
+
+where: 
+
+* $\sum_{j = 1}^{p}{\rho_{j}\varepsilon_{i}(t)}$ is the AR(p) process;
+
+* $\sum_{j = 1}^{q}{\theta_{j}\varepsilon_{i}(t)$ is the MA(q) process; and
+
+* $\delta_{i}(t) \sim N(0, \Sigma_{\delta_{i}})$ are spatially correlated 
+errors;
+
+Spatial correlation in the ARMA terms is generated with an exponential power 
+function: 
+
+$$\Sigma_{\delta_{i}} = I\eta_i + (\sigma^{2} - \mu_{\eta_i})exp{((-d_{i, j}/r)^a)} \tag{3}$$
+
+where: 
+
+* $I\eta_{i}$ is an Identity matrix multiplied by the nugget $\eta_{i}$, 
+which may be fixed OR variable in space: 
+$\eta_{i} \sim N(0, \Sigma_{\text{Matern}})$; 
+
+* $\sigma^2$ is the sill (variance) of $\delta_i$ (I'll stick with unit variance);
+
+* $d_{i, j}$ is the distance between pixels $i$ and $j$;
+
+* $r$ is the range of the spatial auto-correlation (in pixels); and
+
+* $a$ is the shape parameter for the auto-correlation function
+
+Other spatial correlations $\Sigma_{\text{Matern}} = R(h)$ will be generated the 
+Matern Cross-covariance function: 
+
+$$R(d_{i, j}; v, c) = 2^{1-v} \Gamma(v)^{-1}(c||d_{i, j}||)^{v} K_{v}(c||d_{i, j}||) \tag{4}$$
+where :
+
+* $c > 0$ is the scale parameter (similar to range $r$)
+
+* $v > 0$ is the smoothness parameter. When $v = \frac{1}{2}$, 
+$R(h)$ is equivalent to $exp(d_{i, j} / c)$ and $\lim_{v \to \infty} R(h) = exp(-d/2c)^2$
+
+* $\Gamma$ is the gamma function, and 
+
+* $K$ is a modified Bessel function of the second kind
+
+**Note:** In practice, this function is very useful for generating smooth spatial 
+correlations and waves (see $\S$ "Spatially variable parameter" below). 
+But may need some help understanding the math and what it's actually 
+doing! It may be worth while to also generate $\delta_{i}$ with Matern correlations?
+
+# Simulation Plans
+
+## Data Generation
+
+In order to vigorously test the robustness of the PARTS method, we will simulate
+1000 sets of predictor variables $u_{k,i}$ and $w_{m,j}$ and varying the effects
+that each of those sets have on $x_i(t)$. Therfore, $x$ will be simulated
+$1000$ for each unique set of effect parameter combinations. The map for all 
+simulations will be the same size: $20\times20$ pixels (or some other size, 
+dependant on speed). $d_{i, j}$ will contain the Euclidean distance between 
+points and will be constant throughout the simulations. 
+
+$u$ will represent land cover class designations, with 4 levels ($m = 4$), coded as dummy 
+variables (i.e. $\{0, 1\}$). It will be generating by discretizing (by quartiles)
+a continuous variable produced with the Matern covariance function. $c$ and $v$
+will be selected to generate a desired spatial pattern and will be constant 
+throughout the simulations. $u$ will have no nugget and unit variance 
+(i.e. $\eta = 0$, $\sigma^2 = 1$).
+
+$w$ will be a single ($k = 1$) spatio-temporal variable representing temperature.
+It will be generated as an ARMA(1, 1) model with Matern covariance structure. 
+$c$ and $v$ will be selected to generate a desired spatial pattern 
+(different from $u$) and will be constant throughout the simulations. $\rho$ and 
+$\theta$ will also be predetermined and constant. $w$ will have unit variance.
+$w$ will have no nugget and unit variance (i.e. $\eta = 0$, $\sigma^2 = 1$).
+
+$x$ will then be generated, for 30 time points ($t = 1, ..., 30$), by varying 
+the following parameters on each of the 1000 data sets. This will allow us to
+compare the effect of the parameter independent of the specific predictor values.
+
+Effects parameters $\beta$, $\phi$, and $\gamma$, will take on one of 3 levels: 2 fixed values 
+(i.e. $\{0, 0.5\}$) and one spatially distributed random variable
+(i.e. $\sim N(0.5, \Sigma_{\text{Matern}})$). The AR parameter $\rho$ will also have 2 levels (e.g. $\{\rho_1 = .6, \rho_2 = .3\}$ and $\{\rho_1 = .8, \rho_2 = .1\}$), the MA parameter $\theta$ 
+will have 2 levels (e.g $\{.1, .5\}$), the spatial nugget $\eta$ will
+have 2 levels (i.e. $\{0, 0.5\}$), and the spatial correlation range parameter 
+$r$ will have 2 levels (i.e. $\{0.2, 0.5\}$). The spatial correlation shape 
+parameter $a = 2$ will remain constant througout the simulations.
+
+With this specification there are 432 unique parameter combinations which would
+yield 432,000 simulations of $x$. It may be best to also hold $\beta$ constant 
+or at least restrict it to 2 fixed values, since we aren't actually interested 
+in our estimate of an the intercept parameter. Doing so would reduce the total
+simulations to 72,000. It may also be acceptable to hold $\theta$ constant, 
+further reducing the total to 36,000 simulations. But, we may also decide to 
+add a level of $\eta$ that is spatially variable.
+
+## Model Fitting
+
+For each simulation of $x$, we will apply the PARTS method. We will use AR_REML
+to fit a time series to each pixel and then will fit a GLS to slope parameters 
+for the effect of time. We will then compare the overall estimate of the effect 
+of time to the true values $(\phi_{m, i})$. If $\phi_m$ was spatially variable, 
+we will compare to the mean $\phi_m$. We will also estimate type I error rates 
+for the case when $\bar{\beta_m} = \bar{\phi_m} = \bar{\gamma_k} = 0$.
+
+# Example Code 
+
+This is some code I ran to test out the spatial correlation functions
+
+First we'll set the initial parameters:
+
+```{r start_params}
+#---
+## Initial Parameters
+#---
+
+set.seed(3654)
+
+# Sim pars ----
+burn.in = 0
+sim.iters = 1
+
+# Map pars ----
+map.cols = 20
+map.rows = 10
+npix = map.rows * map.cols # should be a square?
+
+# ARMA pars ----
+rhos = c(0.6, 0.2)# AR parameter(s): must sum to less than 1
+thetas = c(.4) # MA parameter: must be less than 1
+
+# Temporal pars ----
+ntime = 30 # number of time points
+
+# varcov pars ----
+cormod = "stable" # 'stable' correlation model: varcov = nug+sill*exp(-(d/scale)^shape)
+dist.meth = "Eucl" # Euclidean distance
+sill = 1 # sill (variance)
+r = .25 # range of spatial autocor, relative to width of map (scale parameter)
+a = 1 # shape of spatial autocor function (shape parameter)
+nug = .2 # fixed nugget
+
+# spatial nugget pars ----
+nug.cormod = "matern"
+nug.distmeth = "Eucl"
+nug.r = .4
+nug.s = 20
+constrain.nug = c(0, 1) # constrain the spatial nugget to these values
+
+# effect parameters ----
+beta = .2 # spatial predictors
+phi = .2 # spatio-temporal predictors
+gamma = .5 # time trends
+
+# Additinal parameter calculations ----
+
+## Assign coordinates to pixels
+coords = as.matrix(expand.grid(x = as.double(1:map.cols), 
+                               y = as.double(1:map.rows)))
+
+## spatial correlation
+psill = sill - nug # partial sill: if nug is spatially variable, use mean(nug)
+range = r * map.cols # range in pixels
+
+## spatially variable parameters
+nug.range = nug.r * map.cols
+nug.smooth = nug.s
+
+
+# Sanity checks ----
+stopifnot(sum(rhos) < 1)
+stopifnot(nrow(coords) == npix)
+
+# parameter table ----
+
+fixed.pars = expand.grid(range = range, a = a, nug = nug, fixed.pars = TRUE)
+
+
+corpars = list(scale = range, power = a, # parameter list for Covmatrix()
+               sill = psill, nugget = nug, mean = 0)
+nugpars = list(scale = nug.range, smooth = nug.smooth, 
+               mean = 0, sill = 1, nugget = 0)
+```
+
+Then:
+
+1) Calculate the spatial covariance matrix $\Sigma_{\delta_{i}}$ with the
+function `Covmatrix` from package `CompRandFld`.
+
+```{r covmat, eval = FALSE}
+start.time = Sys.time()
+
+# Calculate varcov matrix (Sigma) ----
+## Covmatrix() - easier to modify specs
+covmat = CompRandFld::Covmatrix(coordx = coords, 
+                                 distance = dist.meth,
+                                 corrmodel = cormod,
+                                 param = corpars)$covmatrix
+
+covmat.tap = CompRandFld::Covmatrix(coordx = coords, 
+                                 distance = dist.meth,
+                                 corrmodel = cormod, 
+                                 type = "Tapering", taper = "Wendland1", 
+                                 param = corpars)$covmatrix
+
+# invcholV = remotePARTS::invert_chol(covmat)
+
+# ## Tony's
+# d = as.matrix(stats::dist(coords, method = "euc"))
+# d.scale = (d - min(d)) / (max(d) - min(d)) # rescale to (0, 1)
+# covmat2 = diag(rep(nug, npix)) + (1 - nug) * exp(-(d/r)^a)
+# invcholV2 = remotePARTS::invert_chol(covmat2)
+# ## Same answer?
+# all((covmat2 - covmat) == 0) # TRUE! - also no speed change
+```
+
+```{r test tapering functions}
+## Wendland tapering function
+Wendl <- function(h, theta = 0.2){
+  w = ifelse(test = abs(h) < theta, 
+             yes = 0,
+             no = (1 - (abs(h)/theta))^4 * (1 + (4*(abs(h)/theta))))
+  
+  return(w)
+}
+
+## Spherical tapering function
+taper.sphr <- function(d, theta, type = "var") {
+  if(type == "dist"){
+    ts = ifelse(d > theta, 
+           0, 
+           ((1 - d/theta)^2) * (1 + d/(2 * theta))
+    )
+  }
+  if(type == "var"){
+    ts = ifelse(d < theta,
+           0,
+           ((1 - d/theta)^2) * (1 + d/(2 * theta)))
+  }
+  return(ts)
+}
+```
+
+```{r, }
+d = scales::rescale(as.matrix(dist(as.matrix(coords))), to = c(0, 1))
+prop.zero = .6
+wend.range = quantile(covmat, probs = prop.zero) # 25% of cells should be zero
+
+# 
+# image(covmat)
+# 
+# image(Wendl(covmat, theta = wend.range))
+# image(taper.sphr(covmat, .5, type = "var"))
+# image(taper.sphr(d, .5*map.cols))
+```
+
+```{r, eval = FALSE}
+## What does theta need to be to have relatively many zeros?
+zeros = Vectorize(function(r){sum(taper.sphr(d, r, type = "dist") == 0)/length(d)})
+curve(expr = zeros(x), from = 0, to = 1)
+x.tmp = seq(0, 1, length.out = 101)
+y.tmp = zeros(x.tmp)
+
+# fm <- lm(y.tmp ~ x.tmp + I(x.tmp^2) + I(x.tmp^3) + I(x.tmp^4))
+# coefs = fm$coefficients
+# 
+# plot(x = x.tmp, y = y.tmp);lines(x = x.tmp, y = c(1, predict(fm)), col = "red")
+
+# 80% zeros 
+max(x.tmp[y.tmp >= .6], na.rm = TRUE) #theta <= 0.33
+max(x.tmp[y.tmp >= .7], na.rm = TRUE) #theta <= 0.26
+max(x.tmp[y.tmp >= .8], na.rm = TRUE) #theta <= 0.21
+```
+
+```{r}
+covmat.sphr = taper.sphr(covmat, wend.range)
+covmat.wendl = covmat.sphr = Wendl(covmat, wend.range)
+covmat.sphr.d = diag(rep(nug, npix)) + (1 - nug) *taper.sphr(d, theta = r, type = "dist")
+sum(covmat.sphr.d == 0)/length(d)
+
+# system.time(t(chol(covmat.sphr.d)))
+# 
+# covmat.sprs = as.spam(covmat.sphr.d)
+# system.time(t(chol(covmat.sprs))) #took 64.5% as long
+# 
+# library(Matrix)
+# covmat.M = as(covmat.sphr.d, "dgTMatrix")
+# system.time(t(Matrix::chol(covmat.M))) #took 92.2% as long
+```
+
+```{r fig.asp = .8, fig.width = 3.5}
+rv = rnorm(npix, sd = 0.5)
+test.dat = data.frame(coords, 
+                      z.og = t(chol(covmat)) %*% rv,
+                      z.og.taper = t(chol(covmat.tap)) %*% rv,
+                      z.sphere = t(chol(covmat.sphr)) %*% rv,
+                      z.wendl = t(chol(covmat.wendl)) %*% rv,
+                      z.sphr.d = t(chol(covmat.sphr.d)) %*% rv
+                      )
+
+test.dat %>% 
+  ggplot(aes(x = x, y = y, fill = z.og)) + 
+  geom_tile() + 
+  # theme(legend.position = "none") +
+  scale_fill_viridis_c(option = "magma") + 
+  labs(title = "Original exp-pow Covariance")
+
+# test.dat %>%
+#   ggplot(aes(x = x, y = y, fill = z.og.taper)) +
+#   geom_tile() +
+#   # theme(legend.position = "none") +
+#   scale_fill_viridis_c(option = "magma") +
+#   labs(title = "Original Wendland1 Taper")
+# 
+# test.dat %>%
+#   ggplot(aes(x = x, y = y, fill = z.wendl)) +
+#   geom_tile() +
+#   # theme(legend.position = "none") +
+#   scale_fill_viridis_c(option = "magma") +
+#   labs(title = "Wendland Tapered Matern")
+# 
+# test.dat %>%
+#   ggplot(aes(x = x, y = y, fill = z.sphere)) +
+#   geom_tile() +
+#   # theme(legend.position = "none") +
+#   scale_fill_viridis_c(option = "magma") +
+#   labs(title = "Spherically Tapered Matern")
+
+test.dat %>% 
+  ggplot(aes(x = x, y = y, fill = z.sphr.d)) + 
+  geom_tile() + 
+  # theme(legend.position = "none") +
+  scale_fill_viridis_c(option = "magma") + 
+  labs(title = "Spherical Taper")
+```
+
+```{r, fig.asp = .8, fig.width = 3.5}
+# Dr <- as(t(chol(exp(-Dist/r))), "dgTMatrix")
+# e <- Dr %*% rnorm(n, sd = s)
+
+Dr = t(chol(covmat.sphr.d))
+e = scale(Dr %*% rnorm(npix, sd = .5))
+
+data.frame(coords,e = e) %>% 
+  ggplot(aes(x = x, y = y, fill = e)) + 
+  geom_tile() +
+  scale_fill_viridis_c(option = "magma") 
+```
+
+
+```{r}
+prop.zero = .8
+wend.range = quantile(covmat, probs = prop.zero) # 25% of cells should be zero
+
+tap.theta = quantile(d, 1-prop.zero)# 25% of cells should be zero
+
+sum(taper.sphr(d, tap.theta) == 0)/length(d)
+
+image(Wendl(covmat, wend.range))
+image(taper.sphr(covmat, 0.25, type = "var"))
+image((exp(-d/10))) # non-tapered 
+# image(taper.sphr(d, tap.theta))
+
+
+```
+
+2) generate $\delta_i$ with `rmvmnorm()`.
+
+```{r space_err, eval = FALSE}
+# Generate spatially correlated errors (delta) ----
+del = mvtnorm::rmvnorm(n = ntime, sigma = covmat, method = "chol")
+```
+
+3) generate $\varepsilon_{i}(t)$.
+
+```{r spacetime_err}
+# Generate ARMA errors (epsilon) ----
+## apply arima.sim() to each column of del
+eps = t(apply(X = del, MARGIN = 2, 
+             function(e){
+               arima.sim(n = ntime, 
+                         model = list(ar = rhos, ma = thetas), 
+                         innov = e)
+             }))
+
+end.time = Sys.time()
+```
+
+```{r}
+end.time - start.time # 3.42 minutes
+```
+
+Let's visualize the correlations among $\varepsilon_{i}(t)$ in space and time:
+
+```{r viz_err, fig.asp = 1, fig.width= 3.5, echo = FALSE}
+# Visualize temporal and spatial correlation ----
+cor(eps) %>% reshape2::melt() %>% 
+  ggplot(aes(x = Var1, y = Var2, fill = value)) + 
+  geom_tile() +
+  scale_fill_viridis_c(option = "magma") +
+  theme(legend.pos = "none") +
+  labs(x = "time i", y = "time j", title = "Temporal correlation")
+
+
+cor(t(eps)) %>% reshape2::melt() %>% 
+  ggplot(aes(x = Var1, y = Var2, fill = value)) + 
+  geom_tile() +
+  scale_fill_viridis_c(option = "magma") +
+  theme(legend.pos = "none") +
+  labs(x = "pixel i", y = "pixel j", title = "Spatial correlation")
+```
+
+4) Add the errors to the rest of the sim model
+
+```{r, eval = FALSE}
+# beta, phi, gamma: user defined effects parameters (possibly spatially variable)
+# u: spatially generated predictors (via mattern function)
+# m: spatio-temporally generated predictors (mattern & ARMA functions)
+
+x = beta*u +  phi*u*time  + gamma*w + eps 
+
+#Note: proper matrix multiplication will be used
+```
+
+# Spatially variability: Matern Covariance
+
+To demonstrate how we can simulate a waved spatial pattern in our predictors 
+and effects parameters, I'll now generate a spatially variable nugget using 
+Matern cross-covariance. When $v$ and $c$ are both large, you get a wave
+across the map:
+
+```{r, fig.asp = .8, fig.width = 3.5, echo = FALSE}
+## spatially distributed nugget?
+# ?CompRandFld::Covmatrix(coords, distance = dist.meth, cormod = "wave")
+# ?CompRandFld::CorrelationParam(corrmodel = "wave")
+
+param.vcov = CompRandFld::Covmatrix(coords, 
+                       distance = dist.meth, 
+                       corrmodel = "matern",
+                       param = nugpars)$covmatrix
+
+## Tapered version: Only 1s and 0s
+# param.vcov = CompRandFld::Covmatrix(coords, 
+#                        distance = dist.meth, 
+#                        corrmodel = "matern", type = "Tapering", taper = "Wedland2",
+#                        param = nugpars)$covmatrix
+
+param.corpars = list(scale = range, power = a, sill = psill, nugget = 0, mean = 0)
+covmat = CompRandFld::Covmatrix(coordx = coords, 
+                                 distance = dist.meth,
+                                 corrmodel = cormod,
+                                 param = param.corpars)$covmatrix
+
+spat.param <- scales::rescale(mvtnorm::rmvnorm(n = 1, sigma = param.vcov), to = constrain.nug)
+
+ggplot(data = data.frame(coords, param = as.vector(spat.param)), 
+       aes(x = x, y = y, fill = param)) +
+  theme_classic() + 
+  theme(legend.position = "none") +
+  geom_tile() + 
+  scale_fill_viridis_c(option = "magma") +
+  labs(x = "x coord", y = "y coord", title = "spatially variable patameter")
+
+## If this parameter is the nugget, then you can use it to simulate ARMA errors:
+covmat = diag(as.vector(spat.param)) + (1-mean(as.vector(spat.param)))*covmat
+del = mvtnorm::rmvnorm(n = ntime, sigma = covmat, method = "chol")
+eps = t(apply(X = del, MARGIN = 2, 
+             function(e){
+               arima.sim(n = ntime, 
+                         model = list(ar = rhos, ma = thetas), 
+                         innov = e)
+             }))
+```
+
+The Matern function is ideal for simulating spatial variables and spatial parameters
+because the resultant patterns can be **substantially** changed by varying $v$ and $c$. 
+To demonstrate this, I'll vary $c$ and $r$. $c = {1/2, 1, 10, 20}$ and
+$v = {1/2, 1, 2, 10}$
+
+```{r, fig.asp = 1, fig.width = 6, echo = FALSE}
+c.tmp = c(.5, 1, 2, 10)
+
+v.tmp = c(1/2, 1, 5, 10)
+
+spatcor.tab = data.frame(NULL)
+
+for (v in v.tmp) for (c in c.tmp){
+  
+  nugpars = list(scale = c, smooth = v, 
+               mean = 0, sill = 1, nugget = 0)
+  
+  nug.vcov = CompRandFld::Covmatrix(coords, 
+                                    distance = dist.meth, 
+                                    corrmodel = "matern", 
+                                    param = nugpars)$covmatrix
+  # image(nug.vcov)
+  spat.nug <- scales::rescale(mvtnorm::rmvnorm(n = 1, sigma = nug.vcov), to = constrain.nug)
+  tmp = data.frame(coords, nug = as.vector(spat.nug), v = v, c = c)
+  spatcor.tab = rbind(spatcor.tab, tmp)
+  
+  # nug.corpars = list(scale = range, power = a, sill = psill, nugget = 0, mean = 0)
+  # covmat = CompRandFld::Covmatrix(coordx = coords, 
+  #                                 distance = dist.meth,
+  #                                 corrmodel = cormod,
+  #                                 param = nug.corpars)$covmatrix
+  # 
+  # covmat = diag(as.vector(spat.nug)) + (1-mean(as.vector(spat.nug)))*covmat
+  # del = mvtnorm::rmvnorm(n = ntime, sigma = covmat, method = "chol")
+  # eps = t(apply(X = del, MARGIN = 2, 
+  #               function(e){
+  #                 arima.sim(n = ntime, 
+  #                           model = list(ar = rhos, ma = thetas), 
+  #                           innov = e)
+  #               }))
+  
+}
+
+ggplot(data = spatcor.tab, aes(x = x, y = y, fill = nug)) +
+  theme_classic() + 
+  theme(legend.position = "none",
+        panel.spacing = unit(0, "lines")) +
+  geom_tile() + 
+  scale_fill_viridis_c(option = "magma") +
+  facet_grid(c ~ v, labeller = "label_both") +
+  labs(x = "x coord", y = "y coord", title = "spatial patterns (matern covariance)")
+```
+
+whereas the stable exponential function has more limited range ($0<a\leq2$). 
+Though, the Gaussian version ($a = 2$) can generate interesting and realistic
+patterns:
+
+```{r, fig.asp = 1, fig.width = 6}
+r.tmp = c(.05, 0.2, .5, 1)*map.cols
+
+a.tmp = c(.5, 1, 1.5, 2)
+
+spatcor.tab = data.frame(NULL)
+
+for (a in a.tmp) for (r in r.tmp){
+  
+  nugpars = list(scale = r, power = a, 
+               mean = 0, sill = 1, nugget = 0)
+  
+  nug.vcov = CompRandFld::Covmatrix(coords, 
+                                    distance = dist.meth, 
+                                    corrmodel = "stable", 
+                                    param = nugpars)$covmatrix
+  # image(nug.vcov)
+  spat.nug <- scales::rescale(mvtnorm::rmvnorm(n = 1, sigma = nug.vcov), to = constrain.nug)
+  tmp = data.frame(coords, nug = as.vector(spat.nug), r = r/map.cols, a = a)
+  spatcor.tab = rbind(spatcor.tab, tmp)
+  
+  # nug.corpars = list(scale = range, power = a, sill = psill, nugget = 0, mean = 0)
+  # covmat = CompRandFld::Covmatrix(coordx = coords, 
+  #                                 distance = dist.meth,
+  #                                 corrmodel = cormod,
+  #                                 param = nug.corpars)$covmatrix
+  # 
+  # covmat = diag(as.vector(spat.nug)) + (1-mean(as.vector(spat.nug)))*covmat
+  # del = mvtnorm::rmvnorm(n = ntime, sigma = covmat, method = "chol")
+  # eps = t(apply(X = del, MARGIN = 2, 
+  #               function(e){
+  #                 arima.sim(n = ntime, 
+  #                           model = list(ar = rhos, ma = thetas), 
+  #                           innov = e)
+  #               }))
+  
+}
+
+ggplot(data = spatcor.tab, aes(x = x, y = y, fill = nug)) +
+  theme_classic() + 
+  theme(legend.position = "none",
+        panel.spacing = unit(0, "lines")) +
+  geom_tile() + 
+  scale_fill_viridis_c(option = "magma") +
+  facet_grid(r ~ a, labeller = "label_both") +
+  labs(x = "x coord", y = "y coord", title = "spatial patterns (stable exp covariance)")
+```
+
+The matern covariance structure seems to have been developed to generate more
+bioligically realistic spatial patterns. 

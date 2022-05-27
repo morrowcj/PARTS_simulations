@@ -1,0 +1,5 @@
+"0",""
+"0","W.data %>% "
+"0","  ggplot(aes(x = variable, y = value, col = as.factor(land))) + "
+"0","  geom_point() + "
+"0","  geom_smooth(method = ""lm"", formula = y ~ x, aes(group = land), alpha = .2)"

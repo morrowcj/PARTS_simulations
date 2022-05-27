@@ -1,0 +1,7 @@
+"0",""
+"0","## Visualize the overall effect of latitude"
+"0","Xdata %>% reshape2::melt(id.vars = c(""x"", ""y"")) %>%"
+"0","  ggplot(aes(x = y, y = value)) +"
+"0","  stat_summary(fun.data = ""mean_cl_normal"") +"
+"0","  geom_smooth(method = ""lm"", aes(group = 1), se = FALSE, formula = y ~ x) +"
+"0","  labs(x = ""Latitude"", y = ""X (map average)"", title = ""Latitude effect"")"

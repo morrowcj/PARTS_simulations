@@ -1,0 +1,5 @@
+"0","# spherical tapering function ----"
+"0","taper.sphr <- function(d, theta){"
+"0","  ts = ifelse(d > theta, 0, ((1 - d/theta)^2) * (1 + d/(2 * theta)) )"
+"0","  return(ts)"
+"0","}"

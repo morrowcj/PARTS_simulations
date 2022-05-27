@@ -1,0 +1,26 @@
+{
+    "id": "F2687FD8",
+    "path": "D:/morrowcj/Documents/Projects/remote-sensing-project/PARTS_simulations/scripts/self-contained-batch-sim_script/summary_PARTS-simulations.Rmd",
+    "project_path": "summary_PARTS-simulations.Rmd",
+    "type": "r_markdown",
+    "hash": "1438530395",
+    "contents": "",
+    "dirty": false,
+    "created": 1627670287443.0,
+    "source_on_save": false,
+    "relative_order": 3,
+    "properties": {
+        "cursorPosition": "963,29",
+        "scrollLine": "0",
+        "last_setup_crc32": "",
+        "docOutlineVisible": "1"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1633543094,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1633551398479,
+    "read_only": false,
+    "read_only_alternatives": []
+}

@@ -1,0 +1,24 @@
+{
+    "id": "EB28F46E",
+    "path": "/media/morrowcj/Vacuole/Maximus_R/PARTS-sim_scripts/run-PARTS-sim.R",
+    "project_path": "run-PARTS-sim.R",
+    "type": "r_source",
+    "hash": "3182863657",
+    "contents": "",
+    "dirty": false,
+    "created": 1624494241248.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "cursorPosition": "447,17",
+        "scrollLine": "437"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1624641063,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1624641063748,
+    "read_only": false,
+    "read_only_alternatives": []
+}

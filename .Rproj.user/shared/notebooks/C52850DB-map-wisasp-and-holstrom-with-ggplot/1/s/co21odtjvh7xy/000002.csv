@@ -1,0 +1,7 @@
+"0","## Alternatively, trees can be represented by squares "
+"0","# (these tiles cover the red lines. You could re-order the layer so that lines are on top)"
+"0","wisasp.plot + "
+"0","  geom_tile(fill = ""grey90"", col = ""black"") + # all trees"
+"0","  geom_tile(data = holst.subset, aes(fill = group), col = ""black"") + # experimental trees"
+"0","  geom_text(data = holst.subset, aes(label = Genet), col = ""black"", size = 2.5, nudge_y = .1) + # label them"
+"0","  theme(legend.position = ""none"") # no legend"

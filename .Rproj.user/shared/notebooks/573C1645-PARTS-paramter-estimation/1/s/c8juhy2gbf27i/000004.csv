@@ -1,0 +1,5 @@
+"0",""
+"0","ggplot(Xdata, aes(x = y, y = alpha.hat)) + "
+"0","  geom_point(alpha = .2) + "
+"0","  geom_smooth(method = ""lm"") +"
+"0","  labs(y = ""Time trend estimate"", x = ""y coordinate"", title = ""Latitude:time effect"")"
